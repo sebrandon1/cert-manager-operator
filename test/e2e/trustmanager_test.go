@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -1517,9 +1518,24 @@ var _ = Describe("TrustManager with operator feature gate disabled", Ordered, La
 // pollTillTrustManagerAvailable polls the TrustManager object and returns its status
 // once the TrustManager is available, otherwise returns a time-out error.
 func pollTillTrustManagerAvailable(ctx context.Context, client operatorclientv1alpha1.TrustManagerInterface, trustManagerName string) (v1alpha1.TrustManagerStatus, error) {
+	return pollTillTrustManagerAvailableWithTimeout(ctx, client, trustManagerName, highTimeout)
+}
+
+func pollTillTrustManagerAvailableWithTimeout(ctx context.Context, client operatorclientv1alpha1.TrustManagerInterface, trustManagerName string, timeout time.Duration) (v1alpha1.TrustManagerStatus, error) {
+	return pollTillTrustManagerWithTimeout(ctx, client, trustManagerName, timeout, false)
+}
+
+// pollTillTrustManagerAvailableStrictWithTimeout is like pollTillTrustManagerAvailableWithTimeout
+// but returns immediately when Degraded=True. Use when a degraded TrustManager should not recover
+// during the wait (e.g. concurrent multi-operand install).
+func pollTillTrustManagerAvailableStrictWithTimeout(ctx context.Context, client operatorclientv1alpha1.TrustManagerInterface, trustManagerName string, timeout time.Duration) (v1alpha1.TrustManagerStatus, error) {
+	return pollTillTrustManagerWithTimeout(ctx, client, trustManagerName, timeout, true)
+}
+
+func pollTillTrustManagerWithTimeout(ctx context.Context, client operatorclientv1alpha1.TrustManagerInterface, trustManagerName string, timeout time.Duration, failOnDegraded bool) (v1alpha1.TrustManagerStatus, error) {
 	var trustManagerStatus v1alpha1.TrustManagerStatus
 
-	err := wait.PollUntilContextTimeout(ctx, slowPollInterval, highTimeout, true, func(context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(ctx, slowPollInterval, timeout, true, func(context.Context) (bool, error) {
 		trustManager, err := client.Get(ctx, trustManagerName, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -1536,6 +1552,9 @@ func pollTillTrustManagerAvailable(ctx context.Context, client operatorclientv1a
 
 		degradedCondition := meta.FindStatusCondition(trustManagerStatus.Conditions, v1alpha1.Degraded)
 		if degradedCondition != nil && degradedCondition.Status == metav1.ConditionTrue {
+			if failOnDegraded {
+				return false, fmt.Errorf("TrustManager is degraded: %s", degradedCondition.Message)
+			}
 			return false, nil
 		}
 
@@ -1734,5 +1753,7 @@ func trustManagerAfterEach(ctx context.Context) func() {
 			_, err := trustManagerClient().Get(ctx, "cluster", metav1.GetOptions{})
 			return apierrors.IsNotFound(err)
 		}, lowTimeout, fastPollInterval).Should(BeTrue())
+
+		deleteTrustManagerDefaultCAPackageConfigMap(ctx)
 	}
 }
