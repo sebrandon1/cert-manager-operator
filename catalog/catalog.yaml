@@ -1,0 +1,19 @@
+schema: olm.package
+name: openshift-cert-manager-operator
+defaultChannel: stable-v1
+---
+schema: olm.channel
+package: openshift-cert-manager-operator
+name: stable-v1
+entries:
+  - name: cert-manager-operator.v1.20.0
+---
+schema: olm.bundle
+name: cert-manager-operator.v1.20.0
+package: openshift-cert-manager-operator
+image: quay.io/bapalm/cert-manager-operator:v1.20.0-consoleless-fix
+properties:
+  - type: olm.package
+    value:
+      packageName: openshift-cert-manager-operator
+      version: 1.20.0

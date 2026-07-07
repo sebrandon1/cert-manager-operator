@@ -1,0 +1,16 @@
+# OLM Optional Manifests
+# Marks Console resources as optional - installation succeeds even if
+# Console CRDs don't exist (consoleless RAN/RDS clusters).
+#
+# Reference: https://github.com/operator-framework/enhancements/blob/master/enhancements/optional-manifest.md
+properties:
+  - type: 'olm.manifests.optional'
+    value:
+      files:
+        # Console YAML samples - provide helpful examples in OpenShift Console UI
+        # Automatically skipped on consoleless clusters
+        - cert-manager-acme-issuer-sample_console.openshift.io_v1_consoleyamlsample.yaml
+        - cert-manager-certificate-sample_console.openshift.io_v1_consoleyamlsample.yaml
+        - cert-manager-issuer-sample_console.openshift.io_v1_consoleyamlsample.yaml
+        # Console QuickStart - guided tutorial in Console UI
+        - cert-manager-example_console.openshift.io_v1_consolequickstart.yaml

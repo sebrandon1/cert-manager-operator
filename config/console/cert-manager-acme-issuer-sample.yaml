@@ -3,7 +3,7 @@ kind: ConsoleYAMLSample
 metadata:
   name: cert-manager-acme-issuer-sample
   annotations:
-    capability.openshift.io/name: Console
+
 spec:
   targetResource:
     apiVersion: cert-manager.io/v1
