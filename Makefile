@@ -60,6 +60,7 @@ endif
 CERT_MANAGER_VERSION ?= v1.19.4
 ISTIO_CSR_VERSION ?= v0.16.0
 TRUST_MANAGER_VERSION ?= v0.20.3
+HTTP01PROXY_VERSION ?= v0.1.0
 
 # --- Test Versions ---
 
@@ -345,6 +346,10 @@ build: generate fmt vet build-operator ## Build operator binary with all checks 
 build-operator: ## Build operator binary only (no checks or code generation).
 	@GOFLAGS="-mod=vendor" source hack/go-fips.sh && $(GO) build $(GOBUILD_VERSION_ARGS) -o $(BIN)
 
+.PHONY: build-http01-proxy
+build-http01-proxy: ## Build HTTP01 proxy binary.
+	@GOFLAGS="-mod=vendor" source hack/go-fips.sh && $(GO) build $(GOBUILD_VERSION_ARGS) -o $(PROJECT_ROOT)/http01-proxy ./cmd/http01-proxy
+
 .PHONY: run
 run: manifests generate fmt vet ## Run the operator from your host (for development).
 	go run $(PACKAGE)
@@ -356,6 +361,10 @@ image-build: ## Build container image with the operator.
 .PHONY: image-push
 image-push: ## Push container image with the operator.
 	$(CONTAINER_ENGINE) push $(IMG) $(CONTAINER_PUSH_ARGS)
+
+.PHONY: image-build-http01-proxy
+image-build-http01-proxy: ## Build HTTP01 proxy container image.
+	$(CONTAINER_ENGINE) build -t cert-manager-http01-proxy:$(HTTP01PROXY_VERSION) -f images/ci/http01proxy.Dockerfile .
 
 # ============================================================================
 # Deployment
