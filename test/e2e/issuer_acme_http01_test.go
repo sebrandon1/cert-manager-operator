@@ -224,8 +224,16 @@ var _ = Describe("ACME Issuer HTTP01 solver", Label("Platform:Generic"), Ordered
 
 		It("should obtain a valid certificate", func() {
 
+			By("waiting for certificate to become ready")
+			err := waitForCertificateReadiness(ctx, secretName, ns.Name)
+			Expect(err).NotTo(HaveOccurred(), "timeout waiting for certificate to become ready")
+
 			By("checking TLS certificate contents")
-			err := wait.PollUntilContextTimeout(ctx, slowPollInterval, highTimeout, true, func(context.Context) (bool, error) {
+			err = verifyCertificate(ctx, secretName, ns.Name, ingressHost)
+			Expect(err).NotTo(HaveOccurred(), "certificate verification failed")
+
+			By("verifying live Ingress TLS endpoint")
+			err = wait.PollUntilContextTimeout(ctx, slowPollInterval, highTimeout, true, func(context.Context) (bool, error) {
 				secret, err := loader.KubeClient.CoreV1().Secrets(ns.Name).Get(ctx, secretName, metav1.GetOptions{})
 				if err != nil {
 					return false, nil // keep polling until the Secret exists
@@ -246,7 +254,7 @@ var _ = Describe("ACME Issuer HTTP01 solver", Label("Platform:Generic"), Ordered
 
 				return isHostCorrect && isNotExpired, nil
 			})
-			Expect(err).NotTo(HaveOccurred(), "timeout waiting for valid TLS certificate")
+			Expect(err).NotTo(HaveOccurred(), "timeout waiting for valid live Ingress TLS certificate")
 		})
 
 		It("should create solver pods with custom resource limits and requests", func() {

@@ -1,9 +1,8 @@
 //go:build e2e
 // +build e2e
 
-// CM-786 IstioCSR Controller qualification (doc section "IstioCSR Controller specific tests"
-// through "Record about cert-manager Operator"): multi-operand install plus sanity and
-// qualification steps 5–14 that are automatable in e2e.
+// Multi-operand e2e coverage: concurrent IstioCSR and TrustManager install, operand
+// health checks, cert-manager behavior, and integration scenarios automatable in e2e.
 package e2e
 
 import (
@@ -37,6 +36,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
@@ -49,16 +49,16 @@ const (
 
 	bothOperandsFeatureGates = "IstioCSR=true,TrustManager=true"
 
-	cm786QualificationLabelKey   = "cm-786-qualification"
-	cm786QualificationLabelValue = "true"
+	multiOperandTestLabelKey   = "cert-manager.operator.openshift.io/e2e-test"
+	multiOperandTestLabelValue = "multi-operands"
 
-	cm10TestDNSName = "multi-operand.cm10.test.example"
-	cm12TestDNSName = "multi-operand.cm12.invalid.example"
+	selfSignedCertDNSName  = "multi-operand.selfsigned.test.example"
+	bogusIssuerCertDNSName = "multi-operand.bogus-issuer.invalid.example"
 
-	qualificationBundleName     = "cm786-ca-bundle-secret"
-	qualificationBundleSourceCM = "cm786-bundle-source"
-	qualificationBundleSourceKey = "ca-bundle.crt"
-	qualificationBundleTargetKey = "ca-bundle.crt"
+	multiOperandBundleName     = "multi-operand-ca-bundle-secret"
+	multiOperandBundleSourceCM = "multi-operand-bundle-source"
+	multiOperandBundleSourceKey = "ca-bundle.crt"
+	multiOperandBundleTargetKey = "ca-bundle.crt"
 )
 
 type operandDeployment struct {
@@ -73,7 +73,7 @@ var coreOperandDeployments = []operandDeployment{
 	{operandNamespace, trustManagerDeploymentName},
 }
 
-var _ = Describe("Multiple operands CM-786 qualification", Ordered, Label("Platform:Generic", "Feature:MultipleOperands", "TechPreview", "Skipped:MicroShift"), func() {
+var _ = Describe("Multiple operands", Ordered, Label("Platform:Generic", "Feature:MultipleOperands", "TechPreview", "Skipped:MicroShift"), func() {
 	var (
 		ctx = context.Background()
 
@@ -81,7 +81,7 @@ var _ = Describe("Multiple operands CM-786 qualification", Ordered, Label("Platf
 		originalUnsupportedAddonFeatures string
 		originalOperatorLogLevel         string
 		istioNS                          *corev1.Namespace
-		qualificationBundlePEM           string
+		multiOperandBundlePEM            string
 	)
 
 	BeforeAll(func() {
@@ -93,15 +93,13 @@ var _ = Describe("Multiple operands CM-786 qualification", Ordered, Label("Platf
 			Skip("MicroShift: OLM not available")
 		}
 
-		trustManagerRemoveStaleOperandServiceAccount(ctx, clientset)
-
 		originalUnsupportedAddonFeatures, err = getSubscriptionEnvVar(ctx, loader, "UNSUPPORTED_ADDON_FEATURES")
 		Expect(err).NotTo(HaveOccurred())
 
 		originalOperatorLogLevel, err = getSubscriptionEnvVar(ctx, loader, "OPERATOR_LOG_LEVEL")
 		Expect(err).NotTo(HaveOccurred())
 
-		By("CM-786 step 8: enable IstioCSR and TrustManager feature gates")
+		By("enabling IstioCSR and TrustManager feature gates")
 		err = patchSubscriptionWithEnvVars(ctx, loader, map[string]string{
 			"UNSUPPORTED_ADDON_FEATURES": bothOperandsFeatureGates,
 			"OPERATOR_LOG_LEVEL":         "4",
@@ -116,12 +114,12 @@ var _ = Describe("Multiple operands CM-786 qualification", Ordered, Label("Platf
 			cert.IsCA = true
 			cert.KeyUsage |= x509.KeyUsageCertSign
 		}
-		qualificationBundlePEM = testutils.GenerateCertificate("cm786-bundle-ca", []string{"cert-manager-operator-e2e"}, caTweak)
+		multiOperandBundlePEM = testutils.GenerateCertificate("multi-operand-bundle-ca", []string{"cert-manager-operator-e2e"}, caTweak)
 	})
 
 	AfterAll(func() {
 		expectDeleteClean(trustManagerClient().Delete(ctx, "cluster", metav1.DeleteOptions{}), "TrustManager CR cluster")
-		deleteTrustManagerDefaultCAPackageConfigMap(ctx)
+		cleanupTrustManagerOperandLeavings(ctx)
 		if istioNS != nil {
 			expectDeleteClean(
 				certmanageroperatorclient.OperatorV1alpha1().IstioCSRs(istioNS.Name).Delete(ctx, istioCSRResourceName, metav1.DeleteOptions{}),
@@ -162,8 +160,8 @@ var _ = Describe("Multiple operands CM-786 qualification", Ordered, Label("Platf
 			istioCSR, err := loadIstioCSRFromTemplate(istioNS.Name, IstioCSRConfig{})
 			Expect(err).NotTo(HaveOccurred())
 
-			By("CM-786 steps 5/10: concurrent TrustManager and IstioCSR CR creation")
-			installOperandsConcurrently(ctx, qualificationTrustManagerCR().Build(), istioCSR)
+			By("creating TrustManager and IstioCSR CRs concurrently")
+			installOperandsConcurrently(ctx, multiOperandTrustManagerCR().Build(), istioCSR)
 
 			waitForOperandsReadyConcurrently(ctx, clientset, istioNS.Name)
 
@@ -175,10 +173,10 @@ var _ = Describe("Multiple operands CM-786 qualification", Ordered, Label("Platf
 			if istioNS == nil {
 				return
 			}
-			expectDeleteClean(bundleClient.Delete(ctx, &trustapi.Bundle{ObjectMeta: metav1.ObjectMeta{Name: qualificationBundleName}}),
-				fmt.Sprintf("Bundle %s", qualificationBundleName))
-			expectDeleteClean(k8sClientSet.CoreV1().ConfigMaps(trustManagerNamespace).Delete(ctx, qualificationBundleSourceCM, metav1.DeleteOptions{}),
-				fmt.Sprintf("ConfigMap %s/%s", trustManagerNamespace, qualificationBundleSourceCM))
+			expectDeleteClean(bundleClient.Delete(ctx, &trustapi.Bundle{ObjectMeta: metav1.ObjectMeta{Name: multiOperandBundleName}}),
+				fmt.Sprintf("Bundle %s", multiOperandBundleName))
+			expectDeleteClean(k8sClientSet.CoreV1().ConfigMaps(trustManagerNamespace).Delete(ctx, multiOperandBundleSourceCM, metav1.DeleteOptions{}),
+				fmt.Sprintf("ConfigMap %s/%s", trustManagerNamespace, multiOperandBundleSourceCM))
 			loader.DeleteFromFile(testassets.ReadFile, filepath.Join("testdata", "istio", "istio_ca_issuer.yaml"), istioNS.Name)
 			loader.DeleteFromFile(testassets.ReadFile, filepath.Join("testdata", "self_signed", "certificate.yaml"), istioNS.Name)
 			loader.DeleteFromFile(testassets.ReadFile, filepath.Join("testdata", "self_signed", "cluster_issuer.yaml"), istioNS.Name)
@@ -199,71 +197,75 @@ var _ = Describe("Multiple operands CM-786 qualification", Ordered, Label("Platf
 			Expect(istioCSRStatus.IstioCSRImage).NotTo(BeEmpty())
 		})
 
-		It("CM-01: all operand deployments have desired replicas ready", func() {
+		It("should have all operand deployments with desired replicas ready", func() {
 			verifyAllOperandDeploymentsReady(ctx, clientset, istioNS.Name)
 		})
 
-		It("CM-02: operand pods have no CrashLoopBackOff", func() {
+		It("should keep operand pods out of CrashLoopBackOff", func() {
 			Expect(allOperandPodsHealthy(ctx, clientset, istioNS.Name)).To(Succeed())
 		})
 
-		It("CM-03: cert-manager webhook service has endpoints", func() {
+		It("should expose cert-manager webhook service endpoints", func() {
 			verifyWebhookServiceHasEndpoints(ctx, clientset)
 		})
 
-		It("CM-10: issues a self-signed namespaced certificate", func() {
-			runCM10SelfSignedCertificateTest(ctx)
+		It("should issue a self-signed namespaced certificate", func() {
+			runMultiOperandSelfSignedCertificateTest(ctx)
 		})
 
-		It("CM-12: certificate with bogus issuer ref stays not Ready and does not break operands", func() {
-			runCM12BogusIssuerTest(ctx, clientset, istioNS.Name)
+		It("should keep operands healthy when a certificate references a bogus issuer", func() {
+			runMultiOperandBogusIssuerCertificateTest(ctx, clientset, istioNS.Name)
 		})
 
-		It("CM-786 step 5: IstioCSR operand resources exist with operator-managed labels", func() {
+		It("should create IstioCSR operand resources with operator-managed labels", func() {
 			verifyIstioCSROperandResources(ctx, clientset, istioNS.Name)
 		})
 
-		It("CM-786 step 10: TrustManager qualification configuration is applied", func() {
-			verifyTrustManagerQualificationConfig(ctx, clientset)
+		It("should apply TrustManager operand configuration", func() {
+			assertTrustManagerCRConfigPropagation(ctx, clientset)
 		})
 
-		It("CM-786 step 10: Bundle propagates ConfigMap source to Secret in selected namespaces", func() {
-			runCM786BundleSecretTargetTest(ctx, qualificationBundlePEM)
+		It("should propagate Bundle ConfigMap source to Secret in selected namespaces", func() {
+			runMultiOperandBundleSecretTargetTest(ctx, multiOperandBundlePEM)
 		})
 
-		It("CM-786 step 11: managed ClusterRoles are recreated after deletion", func() {
-			runCM786ManagedClusterRoleRecreationTest(ctx, clientset, istioNS.Name)
+		It("should recreate managed ClusterRoles after deletion", func() {
+			runMultiOperandManagedClusterRoleRecreationTest(ctx, clientset, istioNS.Name)
 		})
 
-		It("CM-786 step 12: updating all three operator CRs keeps operands healthy", func() {
-			runCM786UpdateAllOperatorCRsTest(ctx, clientset, istioNS.Name)
+		It("should keep operands healthy after updating all three operator CRs", func() {
+			runMultiOperandUpdateAllOperatorCRsTest(ctx, clientset, istioNS.Name)
 		})
 
-		It("CM-786 step 13: IstioCSR API updates reconcile successfully", func() {
-			runCM786IstioCSRSpecUpdateTest(ctx, istioNS.Name)
+		It("should reconcile IstioCSR API updates successfully", func() {
+			runMultiOperandIstioCSRSpecUpdateTest(ctx, istioNS.Name)
 		})
 
-		It("CM-786 step 14: IstioCSR gRPC CreateCertificate returns a cert chain", func() {
-			runCM786IstioCSRGRPCCertificateTest(ctx, clientset, istioNS)
+		It("should return a cert chain from IstioCSR gRPC CreateCertificate", func() {
+			runMultiOperandIstioCSRGRPCCertificateTest(ctx, clientset, istioNS)
 		})
 
-		It("CM-786 steps 6-7: Service Mesh uses istio-csr when Service Mesh is installed", func() {
-			runCM786ServiceMeshIstioCSRIntegrationTest(ctx, clientset, istioNS.Name)
+		It("should use istio-csr for Service Mesh when Service Mesh is installed", func() {
+			runMultiOperandServiceMeshIstioCSRIntegrationTest(ctx, clientset, istioNS.Name)
 		})
 	})
 })
 
-func qualificationTrustManagerCR() *trustManagerCRBuilder {
+func multiOperandTrustManagerCR() *trustManagerCRBuilder {
 	return newTrustManagerCR().
 		WithLabels(map[string]string{"env": "trustmanager-test"}).
 		WithAnnotations(map[string]string{"trustmanager.operator.openshift.io/cluster": "trustmanager-test"}).
 		WithDefaultCAPackage(v1alpha1.DefaultCAPackagePolicyEnabled).
 		WithFilterExpiredCertificates(v1alpha1.FilterExpiredCertificatesPolicyEnabled).
-		WithSecretTargets(v1alpha1.SecretTargetsPolicyCustom, []string{"ca-bundle-secret", qualificationBundleName}).
+		WithSecretTargets(v1alpha1.SecretTargetsPolicyCustom, []string{"ca-bundle-secret", multiOperandBundleName}).
 		WithTrustNamespace(trustManagerNamespace)
 }
 
+// installOperandsConcurrently creates TrustManager and IstioCSR CRs at the same time so both
+// controllers reconcile in parallel. Each Create is blocking, but running them in separate
+// goroutines overlaps the requests; sequential Create would not exercise concurrent install.
 func installOperandsConcurrently(ctx context.Context, trustManager *v1alpha1.TrustManager, istioCSR *v1alpha1.IstioCSR) {
+	// Gate both goroutines so close(start) releases them together.
 	start := make(chan struct{})
 	var wg sync.WaitGroup
 	var tmErr, istioErr error
@@ -271,16 +273,16 @@ func installOperandsConcurrently(ctx context.Context, trustManager *v1alpha1.Tru
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		<-start
+		<-start // block until both workers are ready
 		_, tmErr = trustManagerClient().Create(ctx, trustManager, metav1.CreateOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		<-start
+		<-start // block until both workers are ready
 		_, istioErr = certmanageroperatorclient.OperatorV1alpha1().IstioCSRs(istioCSR.Namespace).Create(ctx, istioCSR, metav1.CreateOptions{})
 	}()
 
-	close(start)
+	close(start) // release both Create calls at once
 	wg.Wait()
 
 	Expect(tmErr).NotTo(HaveOccurred())
@@ -351,12 +353,23 @@ func verifyAllOperandDeploymentsReady(ctx context.Context, clientset *kubernetes
 	deployments := append([]operandDeployment{}, coreOperandDeployments...)
 	deployments = append(deployments, operandDeployment{istioNamespace, istioCSRDeploymentName})
 
+	var eg errgroup.Group
 	for _, dep := range deployments {
 		dep := dep
-		Eventually(func(g Gomega) {
-			g.Expect(assertDeploymentReplicasReady(ctx, clientset, dep.namespace, dep.name)).To(Succeed())
-		}, lowTimeout, fastPollInterval).Should(Succeed(), "deployment %s/%s", dep.namespace, dep.name)
+		eg.Go(func() error {
+			err := wait.PollUntilContextTimeout(ctx, fastPollInterval, lowTimeout, true, func(context.Context) (bool, error) {
+				if err := assertDeploymentReplicasReady(ctx, clientset, dep.namespace, dep.name); err != nil {
+					return false, nil
+				}
+				return true, nil
+			})
+			if err != nil {
+				return fmt.Errorf("deployment %s/%s: %w", dep.namespace, dep.name, err)
+			}
+			return nil
+		})
 	}
+	Expect(eg.Wait()).To(Succeed())
 }
 
 func assertDeploymentReplicasReady(ctx context.Context, clientset *kubernetes.Clientset, namespace, name string) error {
@@ -402,17 +415,17 @@ func verifyWebhookServiceHasEndpoints(ctx context.Context, clientset *kubernetes
 	}, lowTimeout, fastPollInterval).Should(Succeed())
 }
 
-func runCM10SelfSignedCertificateTest(ctx context.Context) {
-	ns, err := loader.CreateTestingNS("multi-operand-cm10", false)
+func runMultiOperandSelfSignedCertificateTest(ctx context.Context) {
+	ns, err := loader.CreateTestingNS("multi-operand-selfsigned", false)
 	Expect(err).NotTo(HaveOccurred())
 	DeferCleanup(func() {
 		loader.DeleteTestingNS(ns.Name, func() bool { return CurrentSpecReport().Failed() })
 	})
 
 	const (
-		clusterIssuerName = "cm10-multi-operand-selfsigned"
-		certName          = "cm10-multi-operand-cert"
-		secretName        = "cm10-multi-operand-tls"
+		clusterIssuerName = "multi-operand-selfsigned-issuer"
+		certName          = "multi-operand-selfsigned-cert"
+		secretName        = "multi-operand-selfsigned-tls"
 	)
 
 	_, err = certmanagerClient.CertmanagerV1().ClusterIssuers().Create(ctx, &certmanagerv1.ClusterIssuer{
@@ -431,7 +444,7 @@ func runCM10SelfSignedCertificateTest(ctx context.Context) {
 		Spec: certmanagerv1.CertificateSpec{
 			SecretName: secretName,
 			Duration:   &metav1.Duration{Duration: time.Hour},
-			DNSNames:   []string{cm10TestDNSName},
+			DNSNames:   []string{selfSignedCertDNSName},
 			IssuerRef: cmmetav1.ObjectReference{
 				Name: clusterIssuerName, Kind: "ClusterIssuer", Group: "cert-manager.io",
 			},
@@ -448,24 +461,24 @@ func runCM10SelfSignedCertificateTest(ctx context.Context) {
 	Expect(secret.Data).To(HaveKey("tls.key"))
 }
 
-func runCM12BogusIssuerTest(ctx context.Context, clientset *kubernetes.Clientset, istioNamespace string) {
-	ns, err := loader.CreateTestingNS("multi-operand-cm12", false)
+func runMultiOperandBogusIssuerCertificateTest(ctx context.Context, clientset *kubernetes.Clientset, istioNamespace string) {
+	ns, err := loader.CreateTestingNS("multi-operand-bogus-issuer", false)
 	Expect(err).NotTo(HaveOccurred())
 	DeferCleanup(func() {
 		loader.DeleteTestingNS(ns.Name, func() bool { return CurrentSpecReport().Failed() })
 	})
 
 	const (
-		bogusIssuerName = "cm12-nonexistent-clusterissuer"
-		certName        = "cm12-bogus-issuer-cert"
-		secretName      = "cm12-tls-should-not-exist"
+		bogusIssuerName = "multi-operand-nonexistent-clusterissuer"
+		certName        = "multi-operand-bogus-issuer-cert"
+		secretName      = "multi-operand-bogus-issuer-tls"
 	)
 
 	_, err = certmanagerClient.CertmanagerV1().Certificates(ns.Name).Create(ctx, &certmanagerv1.Certificate{
 		ObjectMeta: metav1.ObjectMeta{Name: certName, Namespace: ns.Name},
 		Spec: certmanagerv1.CertificateSpec{
 			SecretName: secretName,
-			DNSNames:   []string{cm12TestDNSName},
+			DNSNames:   []string{bogusIssuerCertDNSName},
 			IssuerRef: cmmetav1.ObjectReference{
 				Name: bogusIssuerName, Kind: "ClusterIssuer", Group: "cert-manager.io",
 			},
@@ -519,7 +532,7 @@ func verifyIstioCSROperandResources(ctx context.Context, clientset *kubernetes.C
 	verifyOperatorManagedLabels(crs.Items[0].Labels, "cert-manager-istio-csr")
 }
 
-func verifyTrustManagerQualificationConfig(ctx context.Context, clientset *kubernetes.Clientset) {
+func assertTrustManagerCRConfigPropagation(ctx context.Context, clientset *kubernetes.Clientset) {
 	Eventually(func(g Gomega) {
 		_, err := k8sClientSet.CoreV1().ConfigMaps(trustManagerNamespace).Get(ctx, defaultCAPackageConfigMapName, metav1.GetOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
@@ -547,10 +560,10 @@ func verifyTrustManagerQualificationConfig(ctx context.Context, clientset *kuber
 	Expect(tm.Spec.TrustManagerConfig.FilterExpiredCertificates).To(Equal(v1alpha1.FilterExpiredCertificatesPolicyEnabled))
 }
 
-func runCM786BundleSecretTargetTest(ctx context.Context, sourcePEM string) {
+func runMultiOperandBundleSecretTargetTest(ctx context.Context, sourcePEM string) {
 	targetNS, err := k8sClientSet.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: "cm786-bundle-target-",
+			GenerateName: "multi-operand-bundle-target-",
 			Labels:       map[string]string{"istio-injection": "enabled"},
 		},
 	}, metav1.CreateOptions{})
@@ -560,27 +573,27 @@ func runCM786BundleSecretTargetTest(ctx context.Context, sourcePEM string) {
 	})
 
 	_, err = k8sClientSet.CoreV1().ConfigMaps(trustManagerNamespace).Create(ctx, &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{Name: qualificationBundleSourceCM},
-		Data:       map[string]string{qualificationBundleSourceKey: sourcePEM},
+		ObjectMeta: metav1.ObjectMeta{Name: multiOperandBundleSourceCM},
+		Data:       map[string]string{multiOperandBundleSourceKey: sourcePEM},
 	}, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 
-	bundle := newBundle(qualificationBundleName).
-		WithConfigMapSource(qualificationBundleSourceCM, qualificationBundleSourceKey).
-		WithSecretTarget(qualificationBundleTargetKey).
+	bundle := newBundle(multiOperandBundleName).
+		WithConfigMapSource(multiOperandBundleSourceCM, multiOperandBundleSourceKey).
+		WithSecretTarget(multiOperandBundleTargetKey).
 		WithNamespaceSelector(map[string]string{"istio-injection": "enabled"}).
 		Build()
 
 	Expect(bundleClient.Create(ctx, bundle)).To(Succeed())
 
-	err = waitForBundleCondition(ctx, bundleClient, qualificationBundleName, trustapi.BundleConditionSynced, metav1.ConditionTrue, highTimeout)
+	err = waitForBundleCondition(ctx, bundleClient, multiOperandBundleName, trustapi.BundleConditionSynced, metav1.ConditionTrue, highTimeout)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = waitForSecretTarget(ctx, bundleClient, qualificationBundleName, targetNS.Name, qualificationBundleTargetKey, sourcePEM, highTimeout)
+	err = waitForSecretTarget(ctx, bundleClient, multiOperandBundleName, targetNS.Name, multiOperandBundleTargetKey, sourcePEM, highTimeout)
 	Expect(err).NotTo(HaveOccurred())
 }
 
-func runCM786ManagedClusterRoleRecreationTest(ctx context.Context, clientset *kubernetes.Clientset, istioNamespace string) {
+func runMultiOperandManagedClusterRoleRecreationTest(ctx context.Context, clientset *kubernetes.Clientset, istioNamespace string) {
 	verifyResourceRecreation(ctx, func() error {
 		return clientset.RbacV1().ClusterRoles().Delete(ctx, trustManagerClusterRoleName, metav1.DeleteOptions{})
 	}, func() error {
@@ -627,13 +640,13 @@ func runCM786ManagedClusterRoleRecreationTest(ctx context.Context, clientset *ku
 	Expect(err).NotTo(HaveOccurred())
 }
 
-func runCM786UpdateAllOperatorCRsTest(ctx context.Context, clientset *kubernetes.Clientset, istioNamespace string) {
+func runMultiOperandUpdateAllOperatorCRsTest(ctx context.Context, clientset *kubernetes.Clientset, istioNamespace string) {
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		cm, getErr := certmanageroperatorclient.OperatorV1alpha1().CertManagers().Get(ctx, "cluster", metav1.GetOptions{})
 		if getErr != nil {
 			return getErr
 		}
-		cm.Labels = mergeLabels(cm.Labels, map[string]string{cm786QualificationLabelKey: cm786QualificationLabelValue})
+		cm.Labels = mergeLabels(cm.Labels, map[string]string{multiOperandTestLabelKey: multiOperandTestLabelValue})
 		_, updateErr := certmanageroperatorclient.OperatorV1alpha1().CertManagers().Update(ctx, cm, metav1.UpdateOptions{})
 		return updateErr
 	})
@@ -644,7 +657,7 @@ func runCM786UpdateAllOperatorCRsTest(ctx context.Context, clientset *kubernetes
 		if getErr != nil {
 			return getErr
 		}
-		tm.Labels = mergeLabels(tm.Labels, map[string]string{cm786QualificationLabelKey: cm786QualificationLabelValue})
+		tm.Labels = mergeLabels(tm.Labels, map[string]string{multiOperandTestLabelKey: multiOperandTestLabelValue})
 		_, updateErr := trustManagerClient().Update(ctx, tm, metav1.UpdateOptions{})
 		return updateErr
 	})
@@ -655,7 +668,7 @@ func runCM786UpdateAllOperatorCRsTest(ctx context.Context, clientset *kubernetes
 		if getErr != nil {
 			return getErr
 		}
-		istioCSR.Labels = mergeLabels(istioCSR.Labels, map[string]string{cm786QualificationLabelKey: cm786QualificationLabelValue})
+		istioCSR.Labels = mergeLabels(istioCSR.Labels, map[string]string{multiOperandTestLabelKey: multiOperandTestLabelValue})
 		_, updateErr := certmanageroperatorclient.OperatorV1alpha1().IstioCSRs(istioNamespace).Update(ctx, istioCSR, metav1.UpdateOptions{})
 		return updateErr
 	})
@@ -666,7 +679,7 @@ func runCM786UpdateAllOperatorCRsTest(ctx context.Context, clientset *kubernetes
 	waitForOperandsReadyConcurrently(ctx, clientset, istioNamespace)
 }
 
-func runCM786IstioCSRSpecUpdateTest(ctx context.Context, istioNamespace string) {
+func runMultiOperandIstioCSRSpecUpdateTest(ctx context.Context, istioNamespace string) {
 	for _, level := range []int32{3, 2, 1} {
 		level := level
 		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -675,7 +688,7 @@ func runCM786IstioCSRSpecUpdateTest(ctx context.Context, istioNamespace string) 
 				return getErr
 			}
 			istioCSR.Spec.IstioCSRConfig.LogLevel = level
-			istioCSR.Labels = mergeLabels(istioCSR.Labels, map[string]string{"test": fmt.Sprintf("cm786-log-%d", level)})
+			istioCSR.Labels = mergeLabels(istioCSR.Labels, map[string]string{"test": fmt.Sprintf("multi-operand-log-%d", level)})
 			_, updateErr := certmanageroperatorclient.OperatorV1alpha1().IstioCSRs(istioNamespace).Update(ctx, istioCSR, metav1.UpdateOptions{})
 			return updateErr
 		})
@@ -693,7 +706,7 @@ func runCM786IstioCSRSpecUpdateTest(ctx context.Context, istioNamespace string) 
 	}
 }
 
-func runCM786IstioCSRGRPCCertificateTest(ctx context.Context, clientset *kubernetes.Clientset, ns *corev1.Namespace) {
+func runMultiOperandIstioCSRGRPCCertificateTest(ctx context.Context, clientset *kubernetes.Clientset, ns *corev1.Namespace) {
 	const grpcAppName = "grpcurl-istio-csr"
 
 	istioCSRStatus, err := pollTillIstioCSRAvailable(ctx, loader, ns.Name, istioCSRResourceName)
@@ -713,7 +726,7 @@ func runCM786IstioCSRGRPCCertificateTest(ctx context.Context, clientset *kuberne
 		_ = clientset.CoreV1().ConfigMaps(ns.Name).Delete(ctx, "proto-cm", metav1.DeleteOptions{})
 	})
 
-	csr := generateCM786CSR(ns.Name)
+	csr := generateMultiOperandIstioCSRCSR(ns.Name)
 	loader.CreateFromFile(AssetFunc(testassets.ReadFile).WithTemplateValues(
 		IstioCSRGRPCurlJobConfig{
 			CertificateSigningRequest: csr,
@@ -756,19 +769,19 @@ func runCM786IstioCSRGRPCCertificateTest(ctx context.Context, clientset *kuberne
 	}
 }
 
-func runCM786ServiceMeshIstioCSRIntegrationTest(ctx context.Context, clientset *kubernetes.Clientset, istioCSRNamespace string) {
+func runMultiOperandServiceMeshIstioCSRIntegrationTest(ctx context.Context, clientset *kubernetes.Clientset, istioCSRNamespace string) {
 	istioGVR := schema.GroupVersionResource{Group: "sailoperator.io", Version: "v1", Resource: "istios"}
 	istioCR, err := loader.DynamicClient.Resource(istioGVR).Get(ctx, "default", metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			Skip("OpenShift Service Mesh (sailoperator.io/v1 Istio/default) is not installed; CM-786 steps 6-7 require manual mesh qualification")
+			Skip("OpenShift Service Mesh (sailoperator.io/v1 Istio/default) is not installed; skipping Service Mesh istio-csr integration check")
 		}
 		Expect(err).NotTo(HaveOccurred())
 	}
 
 	caAddress, found, err := unstructuredNestedString(istioCR.Object, "spec", "values", "global", "caAddress")
 	if err != nil || !found {
-		Skip("Service Mesh Istio CR does not expose spec.values.global.caAddress; skipping CM-786 step 7 mesh CA check")
+		Skip("Service Mesh Istio CR does not expose spec.values.global.caAddress; skipping mesh CA address check")
 	}
 	Expect(caAddress).To(ContainSubstring("cert-manager-istio-csr"))
 
@@ -783,11 +796,11 @@ func runCM786ServiceMeshIstioCSRIntegrationTest(ctx context.Context, clientset *
 	}, lowTimeout, fastPollInterval).Should(Succeed())
 }
 
-func generateCM786CSR(istioNamespace string) string {
+func generateMultiOperandIstioCSRCSR(istioNamespace string) string {
 	csrTemplate := &x509.CertificateRequest{
 		Subject: pkix.Name{
-			Organization:       []string{"CM-786"},
-			OrganizationalUnit: []string{"cert-manager-operator-e2e"},
+			Organization:       []string{"cert-manager-operator-e2e"},
+			OrganizationalUnit: []string{"multi-operand"},
 			Country:            []string{"US"},
 		},
 		URIs: []*url.URL{

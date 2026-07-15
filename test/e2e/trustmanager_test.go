@@ -1638,28 +1638,11 @@ func findSecretRule(rules []rbacv1.PolicyRule, verb string) *rbacv1.PolicyRule {
 	return nil
 }
 
-// trustManagerRemoveStaleOperandServiceAccount deletes the trust-manager operand ServiceAccount if it
-// exists and waits until it is gone. TrustManager CR deletion does not remove this SA today, so a
-// prior e2e run can leave it behind and affect later tests.
-//
-// TODO: Remove this when TrustManager is GA and operand teardown removes the ServiceAccount (or
-// equivalent) when the TrustManager CR is deleted.
-func trustManagerRemoveStaleOperandServiceAccount(ctx context.Context, cs *kubernetes.Clientset) {
-	By("removing stale trust-manager ServiceAccount if present")
-	_ = cs.CoreV1().ServiceAccounts(trustManagerNamespace).Delete(ctx, trustManagerServiceAccountName, metav1.DeleteOptions{})
-	Eventually(func() bool {
-		_, err := cs.CoreV1().ServiceAccounts(trustManagerNamespace).Get(ctx, trustManagerServiceAccountName, metav1.GetOptions{})
-		return apierrors.IsNotFound(err)
-	}, lowTimeout, fastPollInterval).Should(BeTrue())
-}
-
 func trustManagerFeatureGateDisabledBeforeAll(ctx context.Context, clientset **kubernetes.Clientset, unsupportedAddonFeatures, operatorLogLevel *string) func() {
 	return func() {
 		cs, err := kubernetes.NewForConfig(cfg)
 		Expect(err).Should(BeNil())
 		*clientset = cs
-
-		trustManagerRemoveStaleOperandServiceAccount(ctx, cs)
 
 		By("capturing original UNSUPPORTED_ADDON_FEATURES from subscription before patching")
 		*unsupportedAddonFeatures, err = getSubscriptionEnvVar(ctx, loader, "UNSUPPORTED_ADDON_FEATURES")
@@ -1689,8 +1672,6 @@ func trustManagerBeforeAll(ctx context.Context, clientset **kubernetes.Clientset
 		cs, err := kubernetes.NewForConfig(cfg)
 		Expect(err).Should(BeNil())
 		*clientset = cs
-
-		trustManagerRemoveStaleOperandServiceAccount(ctx, cs)
 
 		By("capturing original UNSUPPORTED_ADDON_FEATURES from subscription before patching")
 		*unsupportedAddonFeatures, err = getSubscriptionEnvVar(ctx, loader, "UNSUPPORTED_ADDON_FEATURES")
@@ -1754,6 +1735,6 @@ func trustManagerAfterEach(ctx context.Context) func() {
 			return apierrors.IsNotFound(err)
 		}, lowTimeout, fastPollInterval).Should(BeTrue())
 
-		deleteTrustManagerDefaultCAPackageConfigMap(ctx)
+		cleanupTrustManagerOperandLeavings(ctx)
 	}
 }

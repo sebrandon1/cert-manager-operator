@@ -2097,15 +2097,15 @@ func formatVaultPodsStatus(pods []corev1.Pod) string {
 			case cs.State.Running != nil:
 				b.WriteString(" state=running")
 			case cs.State.Waiting != nil:
-				fmt.Fprintf(&b, " state=waiting reason=%s", cs.State.Waiting.Reason)
+				fmt.Fprintf(&b, " state=waiting reason=%s message=%q", cs.State.Waiting.Reason, cs.State.Waiting.Message)
 			case cs.State.Terminated != nil:
-				fmt.Fprintf(&b, " state=terminated reason=%s exitCode=%d",
-					cs.State.Terminated.Reason, cs.State.Terminated.ExitCode)
+				fmt.Fprintf(&b, " state=terminated reason=%s exitCode=%d message=%q",
+					cs.State.Terminated.Reason, cs.State.Terminated.ExitCode, cs.State.Terminated.Message)
 			}
 		}
 		for _, cond := range pod.Status.Conditions {
 			if cond.Status != corev1.ConditionTrue {
-				fmt.Fprintf(&b, " condition=%s:%s", cond.Type, cond.Status)
+				fmt.Fprintf(&b, " condition=%s:%s:%s", cond.Type, cond.Status, cond.Message)
 			}
 		}
 		b.WriteString("; ")
