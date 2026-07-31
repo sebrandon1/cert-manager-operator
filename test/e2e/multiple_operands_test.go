@@ -9,7 +9,6 @@ import (
 	"context"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
@@ -146,7 +145,7 @@ var _ = Describe("Multiple operands", Ordered, Label("Platform:Generic", "Featur
 		BeforeAll(func() {
 			var err error
 
-			istioNS, err = loader.CreateTestingNS("multi-operand-istio", true)
+			istioNS, err = loader.CreateTestingNS("multi-operand-istio", false)
 			Expect(err).NotTo(HaveOccurred())
 
 			loader.CreateFromFile(testassets.ReadFile, filepath.Join("testdata", "self_signed", "cluster_issuer.yaml"), istioNS.Name)
@@ -760,9 +759,9 @@ func runMultiOperandIstioCSRGRPCCertificateTest(ctx context.Context, clientset *
 	logData, err := io.ReadAll(logStream)
 	Expect(err).NotTo(HaveOccurred())
 
-	var entry LogEntry
-	Expect(json.Unmarshal(logData, &entry)).To(Succeed())
-	Expect(entry.CertChain).NotTo(BeEmpty())
+	entry, err := parseGRPCurlLogEntry(logData)
+	Expect(err).Should(BeNil())
+	Expect(entry.CertChain).ShouldNot(BeEmpty())
 
 	for _, certPEM := range entry.CertChain {
 		Expect(library.ValidateCertificate(certPEM, "my-selfsigned-ca")).To(Succeed())
