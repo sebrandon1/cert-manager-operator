@@ -224,8 +224,16 @@ var _ = Describe("ACME Issuer HTTP01 solver", Label("Platform:Generic"), Ordered
 
 		It("should obtain a valid certificate", func() {
 
+			By("waiting for certificate to become ready")
+			err := waitForCertificateReadiness(ctx, secretName, ns.Name)
+			Expect(err).NotTo(HaveOccurred(), "timeout waiting for certificate to become ready")
+
 			By("checking TLS certificate contents")
-			err := wait.PollUntilContextTimeout(ctx, slowPollInterval, highTimeout, true, func(context.Context) (bool, error) {
+			err = verifyCertificate(ctx, secretName, ns.Name, ingressHost)
+			Expect(err).NotTo(HaveOccurred(), "certificate verification failed")
+
+			By("verifying live Ingress TLS endpoint")
+			err = wait.PollUntilContextTimeout(ctx, slowPollInterval, highTimeout, true, func(context.Context) (bool, error) {
 				secret, err := loader.KubeClient.CoreV1().Secrets(ns.Name).Get(ctx, secretName, metav1.GetOptions{})
 				if err != nil {
 					return false, nil // keep polling until the Secret exists
@@ -246,7 +254,7 @@ var _ = Describe("ACME Issuer HTTP01 solver", Label("Platform:Generic"), Ordered
 
 				return isHostCorrect && isNotExpired, nil
 			})
-			Expect(err).NotTo(HaveOccurred(), "timeout waiting for valid TLS certificate")
+			Expect(err).NotTo(HaveOccurred(), "timeout waiting for valid live Ingress TLS certificate")
 		})
 
 		It("should create solver pods with custom resource limits and requests", func() {
@@ -265,7 +273,7 @@ var _ = Describe("ACME Issuer HTTP01 solver", Label("Platform:Generic"), Ordered
 			}
 
 			err := wait.PollUntilContextTimeout(ctx, fastPollInterval, lowTimeout, true, func(ctx context.Context) (bool, error) {
-				pods, err := k8sClientSet.CoreV1().Pods("").List(ctx, metav1.ListOptions{
+				pods, err := k8sClientSet.CoreV1().Pods(ns.Name).List(ctx, metav1.ListOptions{
 					LabelSelector: acmeSolverPodLabel,
 				})
 				if err != nil {
@@ -286,10 +294,6 @@ var _ = Describe("ACME Issuer HTTP01 solver", Label("Platform:Generic"), Ordered
 				return false, nil // No matching pods yet, keep waiting
 			})
 			Expect(err).NotTo(HaveOccurred(), "should find ACME HTTP01 solver pods with expected resource configuration")
-
-			By("waiting for certificate to get ready")
-			err = waitForCertificateReadiness(ctx, secretName, ns.Name)
-			Expect(err).NotTo(HaveOccurred(), "timeout waiting for certificate to become ready")
 		})
 	})
 

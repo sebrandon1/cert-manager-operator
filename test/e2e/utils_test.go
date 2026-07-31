@@ -82,6 +82,10 @@ var (
 	// Image pulls and PVC binding on CI often exceed the previous 3m default.
 	vaultPodStartTimeout = 10 * time.Minute
 
+	// multiOperandReadyTimeout covers concurrent TrustManager and IstioCSR install on slow CI:
+	// operator rollout, image pulls, and CR reconciliation can exceed highTimeout individually.
+	multiOperandReadyTimeout = 20 * time.Minute
+
 	// fastPollInterval and lowTimeout are
 	// used together in poll(s) with fast reaction and
 	// smaller timeout window.
@@ -1167,9 +1171,13 @@ func pollTillServiceAccountAvailable(ctx context.Context, clientset *kubernetes.
 // pollTillIstioCSRAvailable poll the istioCSR object and returns non-nil error and istioCSRStatus
 // once the istiocsr is available, otherwise should return a time-out error
 func pollTillIstioCSRAvailable(ctx context.Context, loader library.DynamicResourceLoader, namespace, istioCsrName string) (v1alpha1.IstioCSRStatus, error) {
+	return pollTillIstioCSRAvailableWithTimeout(ctx, loader, namespace, istioCsrName, highTimeout)
+}
+
+func pollTillIstioCSRAvailableWithTimeout(ctx context.Context, loader library.DynamicResourceLoader, namespace, istioCsrName string, timeout time.Duration) (v1alpha1.IstioCSRStatus, error) {
 	var istioCSRStatus v1alpha1.IstioCSRStatus
 	istiocsrClient := loader.DynamicClient.Resource(istiocsrSchema).Namespace(namespace)
-	err := wait.PollUntilContextTimeout(ctx, slowPollInterval, highTimeout, true, func(context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(ctx, slowPollInterval, timeout, true, func(context.Context) (bool, error) {
 		customResource, err := istiocsrClient.Get(ctx, istioCsrName, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -1343,7 +1351,11 @@ func cleanupAllIstioCSROperands(ctx context.Context, loader library.DynamicResou
 // pollTillDeploymentAvailable poll the deployment object and returns non-nil error
 // once the deployment is available, otherwise should return a time-out error
 func pollTillDeploymentAvailable(ctx context.Context, clientSet *kubernetes.Clientset, namespace, deploymentName string) error {
-	err := wait.PollUntilContextTimeout(ctx, slowPollInterval, highTimeout, true, func(context.Context) (bool, error) {
+	return pollTillDeploymentAvailableWithTimeout(ctx, clientSet, namespace, deploymentName, highTimeout)
+}
+
+func pollTillDeploymentAvailableWithTimeout(ctx context.Context, clientSet *kubernetes.Clientset, namespace, deploymentName string, timeout time.Duration) error {
+	err := wait.PollUntilContextTimeout(ctx, slowPollInterval, timeout, true, func(context.Context) (bool, error) {
 		deployment, err := clientSet.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {

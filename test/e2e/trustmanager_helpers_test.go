@@ -130,6 +130,28 @@ func deleteTrustManager(ctx context.Context) {
 		_, err := trustManagerClient().Get(ctx, "cluster", metav1.GetOptions{})
 		return apierrors.IsNotFound(err)
 	}, lowTimeout, fastPollInterval).Should(BeTrue())
+
+	cleanupTrustManagerOperandLeavings(ctx)
+}
+
+// cleanupTrustManagerOperandLeavings removes operand resources left behind when the TrustManager CR
+// is deleted. The operator does not tear these down today (see controller cleanUp TODO).
+func cleanupTrustManagerOperandLeavings(ctx context.Context) {
+	By("cleaning up trust-manager operand ServiceAccount if present")
+	_ = k8sClientSet.CoreV1().ServiceAccounts(trustManagerNamespace).Delete(ctx, trustManagerServiceAccountName, metav1.DeleteOptions{})
+	Eventually(func() bool {
+		_, err := k8sClientSet.CoreV1().ServiceAccounts(trustManagerNamespace).Get(ctx, trustManagerServiceAccountName, metav1.GetOptions{})
+		return apierrors.IsNotFound(err)
+	}, lowTimeout, fastPollInterval).Should(BeTrue())
+
+	deleteTrustManagerDefaultCAPackageConfigMap(ctx)
+}
+
+// deleteTrustManagerDefaultCAPackageConfigMap removes the operand ConfigMap created when
+// default CAPackage is Enabled. The operator does not delete it when the CR is removed
+// or policy is Disabled, so e2e tests must clean it up to avoid cross-suite pollution.
+func deleteTrustManagerDefaultCAPackageConfigMap(ctx context.Context) {
+	_ = k8sClientSet.CoreV1().ConfigMaps(trustManagerNamespace).Delete(ctx, defaultCAPackageConfigMapName, metav1.DeleteOptions{})
 }
 
 // ---------------------------------------------------------------------------
