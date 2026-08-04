@@ -1,7 +1,7 @@
 # Security Guidelines
 
 Repo-specific security conventions for the cert-manager-operator. This is not a generic
-Kubernetes/OpenShift security primer — see [AGENTS.md](../AGENTS.md) and `ai-docs/` for
+Kubernetes/OpenShift security primer — see [AGENTS.md](../../AGENTS.md) and `harness-evals/harness-docs/` for
 architecture. Rules below are enforced by code, CRD validation, or CI unless noted.
 
 ## NetworkPolicies
@@ -38,7 +38,7 @@ architecture. Rules below are enforced by code, CRD validation, or CI unless not
   resolves to `Intermediate`, not "no TLS enforcement" — don't treat missing config as "TLS profile
   disabled".
 - CSV declares `tls-profiles: "false"` despite the runtime hook existing — this is a known
-  inconsistency (see `ai-docs/architecture/components.md`); don't assume the annotation reflects actual
+  inconsistency (see `architecture/components.md`); don't assume the annotation reflects actual
   behavior when auditing.
 
 ```go
@@ -89,7 +89,7 @@ if effective.MinTLSVersion == configv1.VersionTLS13 {
 ## Cloud Credentials
 
 - The operator **mounts an existing Secret**; it does not create `CredentialsRequest` objects
-  (`docs/cloud_credentials.md`, `credentials_request.go` despite its filename). Do not add
+  (`../../docs/cloud_credentials.md`, `credentials_request.go` despite its filename). Do not add
   CredentialsRequest-creation logic here — that belongs to `ccoctl`/cloud-credential-operator flows
   documented for cluster admins.
 - `--cloud-credentials-secret` / `CLOUD_CREDENTIALS_SECRET_NAME` only mounts into the **CertManager
@@ -107,7 +107,7 @@ if effective.MinTLSVersion == configv1.VersionTLS13 {
 
 - `TRUSTED_CA_CONFIGMAP_NAME` / `--trusted-ca-configmap` mounts a ConfigMap the **cluster admin**
   creates and labels with `config.openshift.io/inject-trusted-cabundle=true` — the operator never
-  creates or labels this ConfigMap itself (`docs/proxy.md`). If a bundle isn't found yet, the hook
+  creates or labels this ConfigMap itself (`../../docs/proxy.md`). If a bundle isn't found yet, the hook
   returns a retryable error (`(Retrying) trusted CA config map %q doesn't exist`); don't convert this
   to a fatal/Degraded condition.
 - The CA bundle is always mounted at the fixed path
@@ -147,7 +147,7 @@ if effective.MinTLSVersion == configv1.VersionTLS13 {
   so a broken scan doesn't silently report success.
 - FIPS: `hack/go-fips.sh` sets `GOEXPERIMENT=strictfipsruntime` and `-tags=strictfipsruntime,openssl`
   when available, and **warns loudly** (not an error) when the local toolchain lacks FIPS support. Per
-  `ai-docs/architecture/components.md` this warning means the resulting binary must not ship to
+  `architecture/components.md` this warning means the resulting binary must not ship to
   CI/production — don't treat a successful non-FIPS local build as CI-equivalent.
 
 ## Generated Artifacts — Don't Hand-Edit Security-Relevant Files

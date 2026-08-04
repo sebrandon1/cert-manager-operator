@@ -6,7 +6,7 @@ Rules for integrating cert-manager-operator with cluster-provided OpenShift serv
 
 - **Rule**: Never hardcode proxy env vars. OLM injects `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` into the operator Deployment when a cluster-wide egress proxy exists (CSV must declare `proxy-aware: true`).
 - The operator propagates these to operands via `withProxyEnv` (`pkg/controller/certmanager/deployment_overrides.go`), which reads `operator-lib/proxy.ReadProxyVarsFromEnv()` and merges into container env for every operand deployment. Do not add a per-deployment opt-out.
-- See [docs/proxy.md](proxy.md).
+- See [docs/proxy.md](../../docs/proxy.md).
 
 ## 2. Trusted Certificate Authority
 
@@ -15,7 +15,7 @@ Rules for integrating cert-manager-operator with cluster-provided OpenShift serv
 - Implementation: `withCAConfigMap` (`deployment_overrides.go`) looks up the ConfigMap via the target-namespace `ConfigMapInformer` lister; if not found it returns a retryable error (`"(Retrying) trusted CA config map %q doesn't exist"`). The library-go `DeploymentController` treats every hook error the same way: it sets `Degraded=True` **and** keeps retrying via the factory's rate limiter — there is no non-degrading "just requeue" state on this stack (see [error-handling-guidelines.md](error-handling-guidelines.md) §7). It never becomes a permanent, un-retried failure, but it does surface as Degraded until the ConfigMap appears.
 - Mount contract is fixed and must not change: volume name `trusted-ca`, mount path `/etc/pki/tls/certs/cert-manager-tls-ca-bundle.crt`, `subPath: ca-bundle.crt` (constants `trustedCAVolumeName`, `trustedCAPath`, `defaultCABundleKey`).
 - If `trustedCAConfigmapName` is empty, `withCAConfigMap` is a no-op — do not add a default configmap name.
-- See [docs/proxy.md](proxy.md) (Trusted CA section).
+- See [docs/proxy.md](../../docs/proxy.md) (Trusted CA section).
 
 ## 3. TLS Security Profile
 
@@ -28,7 +28,7 @@ Rules for integrating cert-manager-operator with cluster-provided OpenShift serv
 
 ## 4. Cloud Credentials (ambient credentials)
 
-- **Rule**: The operator only **mounts an existing Secret** into the `cert-manager` controller deployment for ACME DNS-01 ambient credentials (AWS Route53 / GCP Cloud DNS). It **must never create, own, or reconcile a `CredentialsRequest`** object — that is a cluster-admin/`ccoctl` responsibility documented for humans in [docs/cloud_credentials.md](cloud_credentials.md), not operator code.
+- **Rule**: The operator only **mounts an existing Secret** into the `cert-manager` controller deployment for ACME DNS-01 ambient credentials (AWS Route53 / GCP Cloud DNS). It **must never create, own, or reconcile a `CredentialsRequest`** object — that is a cluster-admin/`ccoctl` responsibility documented for humans in [docs/cloud_credentials.md](../../docs/cloud_credentials.md), not operator code.
 - Flag `--cloud-credentials-secret` (`operator.CloudCredentialSecret`) names a Secret that **must already exist** in the `cert-manager` namespace before it is referenced.
 - Implementation: `withCloudCredentials` (`pkg/controller/certmanager/credentials_request.go`):
   - No-op for every deployment except `certmanagerControllerDeployment` — never mount on webhook/cainjector.
@@ -47,7 +47,7 @@ Rules for integrating cert-manager-operator with cluster-provided OpenShift serv
 - Operands expose Prometheus metrics on port `9402` at `/metrics` for all three components (controller, webhook, cainjector).
 - Admins must enable OpenShift user-workload monitoring (`enableUserWorkload: true` in `cluster-monitoring-config`) and apply a `ServiceMonitor` selecting `cert-manager` namespace services by the labels above.
 - Metrics TLS (when the cluster TLS profile requires it) is layered on via `tlsprofile.CertManagerOperandMetricsTLSArgs`, not via this doc's ServiceMonitor step — do not conflate the two; a metrics TLS listener still needs `insecureSkipVerify`/TLS config on the scraping side if enabled.
-- See [docs/operand_metrics.md](operand_metrics.md) for full scrape/query walkthrough.
+- See [docs/operand_metrics.md](../../docs/operand_metrics.md) for full scrape/query walkthrough.
 
 ## 6. Optional APIs (Infrastructure / APIServer discovery)
 

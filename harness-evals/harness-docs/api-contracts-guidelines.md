@@ -1,6 +1,6 @@
 # API Contracts Guidelines
 
-Rules for changing or adding to `api/operator/v1alpha1/`. Read `ai-docs/domain/*.md`
+Rules for changing or adding to `api/operator/v1alpha1/`. Read `domain/*.md`
 and the relevant ADR before touching a CR's Spec/Status. **Verify every field against
 the Go types under `api/operator/v1alpha1/` — never invent, assume, or backfill a
 field from upstream cert-manager/trust-manager/istio-csr docs.**
@@ -32,7 +32,7 @@ Rules:
 
 ## 2. Spec/Status Conventions
 
-Two status models coexist by design (see `ai-docs/decisions/adr-0001-dual-controller-frameworks.md`).
+Two status models coexist by design (see `decisions/adr-0001-dual-controller-frameworks.md`).
 Never assume one is used everywhere:
 
 - **CertManager**: embeds OpenShift `apiv1.OperatorSpec` / `apiv1.OperatorStatus`
@@ -42,7 +42,7 @@ Never assume one is used everywhere:
   (`api/operator/v1alpha1/meta.go`) — just `Conditions []metav1.Condition`. Condition
   types are `Ready` / `Degraded`; reasons are `Failed` / `Ready` / `Progressing`
   (`conditions.go`). Do not introduce new condition types without updating
-  `conditions.go` and both `ai-docs/domain/istiocsr.md` and `trustmanager.md`.
+  `conditions.go` and both `domain/istiocsr.md` and `trustmanager.md`.
 
 Structural conventions to follow for any new CR or field:
 
@@ -121,7 +121,7 @@ objects — a new namespaced singleton needs the same controller-side check.
 `IstioCSR` (GA, default **true**) and `TrustManager` (TechPreview, default **false**)
 are gated in `api/operator/v1alpha1/features.go` via
 `featuregate.Feature`/`OperatorFeatureGates`, enabled at runtime through
-`--unsupported-addon-features` (see `ai-docs/decisions/adr-0003-feature-gates.md`).
+`--unsupported-addon-features` (see `decisions/adr-0003-feature-gates.md`).
 `CertManager` is always on and ungated.
 
 Rules for a new feature-gated CR:
@@ -174,6 +174,6 @@ operand bindata) and regenerate.
 - Don't document `UnsupportedConfigOverrides.{Controller,Webhook,CAInjector}` as
   first-class `Spec` fields — they're helper types for parsing
   `OperatorSpec.UnsupportedConfigOverrides` (a `RawExtension`), not real schema fields.
-- When documenting a CR, cross-check `ai-docs/domain/<name>.md` — if your reading of
+- When documenting a CR, cross-check `domain/<name>.md` — if your reading of
   the Go type conflicts with that doc, prefer the Go source and flag the doc as
   possibly stale rather than propagating the conflict into new docs.

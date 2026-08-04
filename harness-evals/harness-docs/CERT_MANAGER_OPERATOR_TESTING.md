@@ -1,6 +1,6 @@
 # Cert Manager Operator - Testing Guide
 
-> **Generic Testing Practices**: See [Platform ai-docs](https://github.com/openshift/enhancements/tree/master/ai-docs). Deep playbook: [docs/testing-guidelines.md](../docs/testing-guidelines.md).
+> **Generic Testing Practices**: See [Platform ai-docs](https://github.com/openshift/enhancements/tree/master/ai-docs). Deep playbook: [testing-guidelines.md](./testing-guidelines.md).
 
 ## Test Layout
 
@@ -54,6 +54,6 @@ Tips: singleton CR names (`cluster` / `default`); operands in `cert-manager` NS;
 
 ## See Also
 
-- [docs/testing-guidelines.md](../docs/testing-guidelines.md)
+- [testing-guidelines.md](./testing-guidelines.md)
 - [CERT_MANAGER_OPERATOR_DEVELOPMENT.md](./CERT_MANAGER_OPERATOR_DEVELOPMENT.md)
 - [architecture/components.md](./architecture/components.md)

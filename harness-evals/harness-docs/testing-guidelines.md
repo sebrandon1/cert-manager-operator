@@ -1,6 +1,6 @@
 # Testing Guidelines
 
-Repo-specific testing reference for `cert-manager-operator`. For generic testing philosophy, see the platform docs linked from `ai-docs/CERT_MANAGER_OPERATOR_TESTING.md`.
+Repo-specific testing reference for `cert-manager-operator`. For generic testing philosophy, see the platform docs linked from `CERT_MANAGER_OPERATOR_TESTING.md`.
 
 ## Test Suites at a Glance
 
@@ -152,10 +152,10 @@ make test-e2e E2E_GINKGO_LABEL_FILTER='Feature:TrustManager && !TechPreview:Inve
 
 ## What Not to Duplicate Here
 
-Generic envtest bootstrap theory and OpenShift e2e framework tutorials belong in the platform `ai-docs`, not this file or `ai-docs/CERT_MANAGER_OPERATOR_TESTING.md`.
+Generic envtest bootstrap theory and OpenShift e2e framework tutorials belong in the platform `ai-docs`, not this file or `CERT_MANAGER_OPERATOR_TESTING.md`.
 
 ## See Also
 
-- `ai-docs/CERT_MANAGER_OPERATOR_TESTING.md`
-- `ai-docs/architecture/components.md` (apply-strategy table)
-- `ai-docs/decisions/adr-0002-apply-strategies.md`
+- `CERT_MANAGER_OPERATOR_TESTING.md`
+- `architecture/components.md` (apply-strategy table)
+- `decisions/adr-0002-apply-strategies.md`

@@ -9,7 +9,8 @@ api/operator/v1alpha1/     # CertManager, IstioCSR, TrustManager types + feature
 bindata/                   # Operand YAML (cert-manager, istio-csr, trust-manager, networkpolicies) — regenerated
 bundle/                    # OLM CSV + CRDs
 config/                    # Kustomize sources for manifests/bundle
-docs/                      # Human docs + *-guidelines.md (agent playbooks)
+docs/                      # Human product docs (proxy, cloud_credentials, operand_metrics)
+harness-evals/harness-docs/ # Agentic docs + *-guidelines.md (OpenSpec /opsx-constitute)
 hack/                      # update-*-manifests, go-fips, clientgen, verify scripts
 pkg/
   cmd/operator/            # Cobra start + flags
@@ -124,16 +125,16 @@ Use `pkg/controller/common` (`ReconcileError`, `FromClientError`, `HandleReconci
 
 | Integration | Mechanism |
 |-------------|-----------|
-| Proxy | `withProxyEnv` + CSV `proxy-aware: true`; see `docs/proxy.md` |
+| Proxy | `withProxyEnv` + CSV `proxy-aware: true`; see `../../../docs/proxy.md` |
 | Trusted CA | `--trusted-ca-configmap` mounts admin-created CM at **`/etc/pki/tls/certs/cert-manager-tls-ca-bundle.crt`** (`subPath: ca-bundle.crt`). Missing CM → library-go sets **Degraded=True and retries** (not a permanent fail). TrustManager separately watches CNO CM `cert-manager-operator-trusted-ca-bundle` — **not** the CertManager flag. |
 | TLS profile | Registered when **Infrastructure** informer is `Applicable()` (APIServer shares that factory; not separately discovered). Applies only when `APIServer.spec.tlsAdherence` is `StrictAllComponents`. Nil profile → **Intermediate**. TLS 1.3 → strip cipher args via `StripArgsByKeys(..., CertManagerCipherSuiteArgKeys)`. Hook **before** `withUnsupportedArgsOverrideHook`. Missing `APIServer/cluster` object → Degraded+retry (not silent). |
-| Cloud credentials | Mount **existing** Secret into **controller** Deployment only — **never** create CredentialsRequest. AWS: `/.aws` + `AWS_SDK_LOAD_CONFIG=1`. GCP: `service_account.json` → `/.config/gcloud/application_default_credentials.json`. Other platforms → hard error. Missing secret → **Degraded=True + retry** (library-go). See `docs/cloud_credentials.md`. |
+| Cloud credentials | Mount **existing** Secret into **controller** Deployment only — **never** create CredentialsRequest. AWS: `/.aws` + `AWS_SDK_LOAD_CONFIG=1`. GCP: `service_account.json` → `/.config/gcloud/application_default_credentials.json`. Other platforms → hard error. Missing secret → **Degraded=True + retry** (library-go). See `../../../docs/cloud_credentials.md`. |
 | Optional APIs | Discover Infrastructure first (`InitInformerIfAvailable` / `Applicable()`). NotFound ≠ error; skip cloud-cred + TLS hooks when absent. |
-| Monitoring | CSV `operatorframework.io/cluster-monitoring: "true"`; operand Service labels in bindata; no operator-owned ServiceMonitor. See `docs/operand_metrics.md`. |
-| FIPS | `hack/go-fips.sh` WARN branch = **local-only**. `go.mod` replace → `openshift/jetstack-cert-manager` should stay lockstep with `CERT_MANAGER_VERSION`. Don’t retarget upstream or silence WARN. Flip CSV `fips-compliant` only with a real guarantee change. See `docs/fips-guidelines.md`. |
+| Monitoring | CSV `operatorframework.io/cluster-monitoring: "true"`; operand Service labels in bindata; no operator-owned ServiceMonitor. See `../../../docs/operand_metrics.md`. |
+| FIPS | `hack/go-fips.sh` WARN branch = **local-only**. `go.mod` replace → `openshift/jetstack-cert-manager` should stay lockstep with `CERT_MANAGER_VERSION`. Don’t retarget upstream or silence WARN. Flip CSV `fips-compliant` only with a real guarantee change. See `fips-guidelines.md`. |
 | OLM | `replaces` / `skipRange`; uninstall requires manual operand cleanup; CSV `tls-profiles: "false"` despite runtime TLS hooks. |
 
-Detail playbooks: `docs/{integration,security,fips,operator-controllers}-guidelines.md`.
+Detail playbooks: `{integration,security,fips,operator-controllers}-guidelines.md` in harness-docs.
 
 ## Cache Constraints (`setup_manager.go`)
 

@@ -1,7 +1,7 @@
 # Cert Manager Operator - Development Guide
 
 > Layout / controller comparison: [architecture/components.md](./architecture/components.md).  
-> Agent playbooks: [docs/*-guidelines.md](../docs/) (operator-controllers, olm-packaging, fips, integration, …).
+> Agent playbooks: [*-guidelines.md](.) (operator-controllers, olm-packaging, fips, integration, …).
 
 ## Quick Start
 
@@ -14,7 +14,7 @@ make local-run   # RELATED_IMAGE_* + versions from Makefile
 make build && make generate && make update-manifests && make verify
 ```
 
-FIPS: `make build` sources `hack/go-fips.sh`. WARN (non-FIPS) builds are **local-only** — never CI/prod/image push. Keep `go.mod` replace `openshift/jetstack-cert-manager` lockstep with `CERT_MANAGER_VERSION`. See [docs/fips-guidelines.md](../docs/fips-guidelines.md).
+FIPS: `make build` sources `hack/go-fips.sh`. WARN (non-FIPS) builds are **local-only** — never CI/prod/image push. Keep `go.mod` replace `openshift/jetstack-cert-manager` lockstep with `CERT_MANAGER_VERSION`. See [fips-guidelines.md](./fips-guidelines.md).
 
 ## Common Tasks
 
@@ -40,7 +40,7 @@ FIPS: `make build` sources `hack/go-fips.sh`. WARN (non-FIPS) builds are **local
 | `cert-manager-istiocsr` | `RELATED_IMAGE_CERT_MANAGER_ISTIOCSR` | `istiocsr/constants.go` |
 | `cert-manager-trust-manager` | `RELATED_IMAGE_CERT_MANAGER_TRUST_MANAGER` | `trustmanager/constants.go` |
 
-`RELATED_IMAGE_*` / `*_OPERAND_IMAGE_VERSION` literals in **`config/manager/manager.yaml` are hand-maintained** — bumping Makefile `CERT_*_VERSION` alone does **not** update them. Edit `manager.yaml` to match, then `make bundle` (auto-fills CSV `relatedImages` from `RELATED_IMAGE_*` env). New operand image also needs controller constants/map. See [docs/olm-packaging-guidelines.md](../docs/olm-packaging-guidelines.md).
+`RELATED_IMAGE_*` / `*_OPERAND_IMAGE_VERSION` literals in **`config/manager/manager.yaml` are hand-maintained** — bumping Makefile `CERT_*_VERSION` alone does **not** update them. Edit `manager.yaml` to match, then `make bundle` (auto-fills CSV `relatedImages` from `RELATED_IMAGE_*` env). New operand image also needs controller constants/map. See [olm-packaging-guidelines.md](./olm-packaging-guidelines.md).
 
 ### Bump operand versions
 
@@ -69,13 +69,13 @@ FIPS: `make build` sources `hack/go-fips.sh`. WARN (non-FIPS) builds are **local
 | Topic | Detail |
 |-------|--------|
 | Namespaces | Operator `cert-manager-operator`; operands `cert-manager` |
-| Cloud creds | AWS `/.aws` + `AWS_SDK_LOAD_CONFIG=1`; GCP ADC path — `docs/cloud_credentials.md` |
-| Trusted CA | Fixed mount path; missing CM = retryable — `docs/integration-guidelines.md` |
+| Cloud creds | AWS `/.aws` + `AWS_SDK_LOAD_CONFIG=1`; GCP ADC path — `../../docs/cloud_credentials.md` |
+| Trusted CA | Fixed mount path; missing CM = retryable — `integration-guidelines.md` |
 | Uninstall | Manual operand cleanup; `console.openshift.io/disable-operand-delete: "true"` |
 
 ## See Also
 
 - [CERT_MANAGER_OPERATOR_TESTING.md](./CERT_MANAGER_OPERATOR_TESTING.md)
 - [architecture/components.md](./architecture/components.md)
-- [docs/operator-controllers-guidelines.md](../docs/operator-controllers-guidelines.md)
-- [docs/olm-packaging-guidelines.md](../docs/olm-packaging-guidelines.md)
+- [operator-controllers-guidelines.md](./operator-controllers-guidelines.md)
+- [olm-packaging-guidelines.md](./olm-packaging-guidelines.md)

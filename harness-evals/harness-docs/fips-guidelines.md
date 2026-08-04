@@ -170,4 +170,4 @@ proceeding — do not treat it as routine build-config cleanup.
 | Wiring into build | `Makefile` → `build-operator` |
 | Operand crypto fork | `go.mod` → `replace github.com/cert-manager/cert-manager => github.com/openshift/jetstack-cert-manager ...` |
 | Compliance claim | `bundle/manifests/cert-manager-operator.clusterserviceversion.yaml` → `features.operators.openshift.io/fips-compliant` |
-| Human-readable overview | `ai-docs/architecture/components.md` (FIPS row) |
+| Human-readable overview | `architecture/components.md` (FIPS row) |
