@@ -45,7 +45,7 @@ Focused e2e runs use the `TEST` variable (passed to `-run`) plus the label filte
 make test-e2e TEST='TestE2E' E2E_GINKGO_LABEL_FILTER='Feature:TrustManager'
 ```
 
-`test-unit` filters packages with `grep -vE 'test/[e2e|apis|utils]'` — new top-level test helper packages under `test/` should follow the existing `test/apis`, `test/e2e`, `test/utils` naming so they're auto-excluded from unit runs.
+`test-unit` filters packages with `grep -vE 'test/(e2e|apis|utils)(/|$)'` — new top-level test helper packages under `test/` should follow the existing `test/apis`, `test/e2e`, `test/utils` naming so they're auto-excluded from unit runs.
 
 ## Unit Test Patterns Per Controller
 
@@ -81,7 +81,17 @@ CertManager tests are library-go-oriented and live beside the controllers (`*_te
 ```go
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -generate
 //counterfeiter:generate -o fakes . CtrlClient
-type CtrlClient interface { Get, List, StatusUpdate, Update, UpdateWithRetry, Create, Delete, Patch, Exists }
+type CtrlClient interface {
+	Get(context.Context, client.ObjectKey, client.Object) error
+	List(context.Context, client.ObjectList, ...client.ListOption) error
+	StatusUpdate(context.Context, client.Object, ...client.SubResourceUpdateOption) error
+	Update(context.Context, client.Object, ...client.UpdateOption) error
+	UpdateWithRetry(context.Context, client.Object, ...client.UpdateOption) error
+	Create(context.Context, client.Object, ...client.CreateOption) error
+	Delete(context.Context, client.Object, ...client.DeleteOption) error
+	Patch(context.Context, client.Object, client.Patch, ...client.PatchOption) error
+	Exists(context.Context, client.ObjectKey, client.Object) (bool, error)
+}
 ```
 
 - Regenerate after changing the interface: `make generate-fakes` (wraps `go generate ./...`).

@@ -37,7 +37,7 @@ test/{apis,e2e}/           # envtest CRD suites + Ginkgo e2e
 2. **Construct** `NewCertManagerControllerSet` + `NewDefaultCertManagerController` (controllers not running yet)
 3. **Start informers** (`informer.Start`, including optional infra factory when `Applicable()`)
 4. **Run** each library-go controller (`go controller.Run`)
-5. `setupFeatureGates` from `--unsupported-addon-features` + optional `featuregates/cluster` read (fail-closed retries; does not abort operator on persistent FeatureGate errors)
+5. `setupFeatureGates` from `--unsupported-addon-features` + optional `featuregates/cluster` read (retries discovery failures; does not abort operator on persistent FeatureGate errors; optional controllers follow internal flags only)
 6. If IstioCSR and/or TrustManager enabled → `NewControllerManager` → Start in goroutine
 7. Block on `ctx.Done()`
 

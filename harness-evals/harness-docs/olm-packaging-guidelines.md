@@ -55,9 +55,11 @@ spec:
 ```
 
 - `replaces` must point at the exact previous CSV name shipped in the same channel (upgrade edge).
-- `olm.skipRange` should cover all previously-published z-streams so upgrades from any older
-  installed version resolve correctly; bump the lower bound as old minors are dropped and the
-  upper bound to the new `<X.Y.0>` being released.
+- `olm.skipRange` should cover all previously-published versions so upgrades from any older
+  installed version resolve correctly; bump the lower bound as old minors are dropped.
+  Set the exclusive upper bound to the **candidate version** being released: `<X.Y.Z>` for a
+  z-stream (e.g. `>=1.20.0 <1.20.1` when shipping `1.20.1`), or `<X.Y.0>` for a new minor
+  (e.g. `>=1.19.0 <1.20.0` when shipping `1.20.0`).
 - Update **both** when cutting a new minor/z-stream; keep `bundle/metadata/annotations.yaml`
   channel labels consistent with the release train.
 
@@ -83,8 +85,11 @@ Make variables change, or `relatedImages` will silently drift from the intended 
 disconnected/digest-pinned overrides and must be bumped by hand alongside the image references.
 Adding a **new** operand image requires: a new `RELATED_IMAGE_*` env in
 `config/manager/manager.yaml`, an entry in the `imageEnvMap` (or equivalent constants file) that
-reads it, and re-running `make bundle` so the corresponding `relatedImages` entry is generated —
-missing any of these will make `operator-sdk bundle validate` / disconnected mirroring fail.
+reads it, and re-running `make bundle` so the corresponding `relatedImages` entry is generated.
+`operator-sdk bundle validate` checks generated bundle/`relatedImages` metadata only — it does
+**not** inspect Go `imageEnvMap`/constants. Confirm the runtime mapping with source review or a
+unit test; a missing map entry can pass bundle validate and still break disconnected operand
+image resolution.
 
 ## RBAC changes
 
@@ -138,10 +143,11 @@ affected operand, then `make update-bindata`.
 
 | Script | Checks | Wired into `make verify-scripts`? |
 |---|---|---|
+| `make verify-bindata` | Regenerated `pkg/operator/assets/bindata.go` matches `bindata/` sources. | Yes (Make dependency) |
 | `hack/verify-bundle.sh` | Runs `make bundle` and fails if the tree has uncommitted diffs. | Yes |
 | `hack/verify-deepcopy.sh` | Generated `zz_generated.deepcopy.go` is current. | Yes |
 | `hack/verify-clientgen.sh` | Generated clientset/informers/listers/applyconfigurations are current. | Yes |
-| `hack/verify-crds.sh` / `verify-crds-version-upgrade.sh` | CRD manifests match `config/crd/bases` and upgrades are compatible. | No — run directly |
+| `hack/verify-crds.sh` / `hack/verify-crds-version-upgrade.sh` | CRD manifests match `config/crd/bases` and upgrades are compatible. | No — run directly |
 
 Run `make verify` (or `make verify-scripts`) locally before sending a PR that touches
 `api/`, `config/`, or `bindata/`; also run `hack/verify-crds*.sh` directly if operand CRDs changed,
@@ -157,7 +163,7 @@ since they are not invoked by any Makefile target in this repo.
 - [ ] `make bundle` — regenerates the bundle CSV/`relatedImages` from the updated `manager.yaml`;
   diff the result to confirm the versions actually changed.
 - [ ] Update the operand version link in the CSV `description` field (`config/manifests/bases/...csv.yaml`).
-- [ ] `hack/verify-crds.sh` / `verify-crds-version-upgrade.sh` pass if operand CRDs changed (run
+- [ ] `hack/verify-crds.sh` / `hack/verify-crds-version-upgrade.sh` pass if operand CRDs changed (run
   directly; not part of `make verify-scripts`).
 
 ## Checklist: bumping the operator version
@@ -172,7 +178,9 @@ since they are not invoked by any Makefile target in this repo.
 
 - [ ] Env var: add to `config/manager/manager.yaml` container `env`; if operand-image-related, wire it through the matching `pkg/controller/*/constants.go`, then rerun `make bundle` — for a `RELATED_IMAGE_*` var this auto-populates the `relatedImages` entry; never hand-add one to the generated bundle CSV.
 - [ ] RBAC: add `+kubebuilder:rbac` marker on the controller; `make manifests`; `make bundle`; diff `config/rbac/role.yaml` and the CSV `clusterPermissions`.
-- [ ] relatedImage: must have a paired `RELATED_IMAGE_*` env and an override in the corresponding controller's image-resolution map/constants — validated by `operator-sdk bundle validate`.
+- [ ] relatedImage: paired `RELATED_IMAGE_*` env in `manager.yaml` + `make bundle` (bundle
+      validate covers `relatedImages`); also wire `imageEnvMap`/controller constants and cover
+      with source review or a unit test — bundle validate does **not** check the Go mapping.
 - [ ] Regenerate bindata if the change also touches an operand manifest template.
 
 ## Checklist: manual operand cleanup on uninstall

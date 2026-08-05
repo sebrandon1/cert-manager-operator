@@ -26,9 +26,12 @@ Rules:
   vendored, not owned here.
 - Never edit `config.openshift.io_certmanagers.yaml`. It is dead/unused; a common
   mistake is assuming it's the operator API.
-- Adding a new operand CRD (e.g. a new `Bundle`-like resource) means adding a YAML base
-  under `config/crd/bases/` and wiring it into `config/crd/kustomization.yaml`, **not**
-  adding a Go type in `api/operator/v1alpha1/`.
+- Do **not** hand-author CRD YAML under `config/crd/bases/`. Operand CRDs
+  (`*-crd.yaml`, `customresourcedefinition_*.yml`) are produced there by
+  `make update-manifests` (`hack/update-{cert-manager,trust-manager}-manifests.sh`
+  from upstream releases). After regeneration, wire the new file into
+  `config/crd/kustomization.yaml` — do **not** add a Go type in
+  `api/operator/v1alpha1/`.
 
 ## 2. Spec/Status Conventions
 
@@ -145,19 +148,23 @@ Never hand-edit generated output. After changing any file in `api/operator/v1alp
 
 1. `make generate` — regenerates deepcopy (`zz_generated.deepcopy.go`) via
    `controller-gen object:...` and client-gen artifacts (`hack/update-clientgen.sh`).
-2. `make manifests` — regenerates CRD YAML under `config/crd/bases/` and RBAC under
-   `config/rbac/` via `controller-gen rbac:... crd webhook`.
+2. `make manifests` — regenerates **operator** CRDs (`operator.openshift.io_*.yaml`)
+   under `config/crd/bases/` and RBAC under `config/rbac/` via
+   `controller-gen rbac:... crd webhook` from Go types in `api/operator/v1alpha1/`.
 3. If operand versions/manifests changed (not API types), use
-   `make update-manifests` (`hack/update-{cert-manager,istio-csr,trust-manager}-manifests.sh`),
-   which is separate from `make generate`/`manifests`.
+   `make update-manifests` (`hack/update-{cert-manager,istio-csr,trust-manager}-manifests.sh`)
+   — refreshes **operand** CRDs in `config/crd/bases/` (`*-crd.yaml`, Bundle YAML) plus
+   bindata; separate from `make generate`/`manifests`.
 4. `make update` runs generate + update-manifests + update-bindata together; CI's
    `verify-scripts` (`verify-bindata`, `verify-deepcopy.sh`, `verify-clientgen.sh`,
    `verify-bundle.sh`) will fail the build if generated output is stale or hand-edited.
 
-Never manually edit: `zz_generated.deepcopy.go`, files under `config/crd/bases/`,
-`pkg/operator/assets/bindata.go`, generated clientset/informers/listers/
-applyconfigurations, or `bindata/` YAML. Edit the Go types (or the source manifests for
-operand bindata) and regenerate.
+Never manually edit CRD **content** under `config/crd/bases/` (or
+`zz_generated.deepcopy.go`, `pkg/operator/assets/bindata.go`, generated
+clientset/informers/listers/applyconfigurations, or `bindata/` YAML). Edit Go
+types and run `make manifests` for operator CRDs; bump upstream versions and run
+`make update-manifests` for operand CRDs. You may edit
+`config/crd/kustomization.yaml` to wire a newly generated CRD file.
 
 ## 7. What Not to Invent About Fields
 

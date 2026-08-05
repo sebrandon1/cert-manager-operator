@@ -108,8 +108,9 @@ if effective.MinTLSVersion == configv1.VersionTLS13 {
 - `TRUSTED_CA_CONFIGMAP_NAME` / `--trusted-ca-configmap` mounts a ConfigMap the **cluster admin**
   creates and labels with `config.openshift.io/inject-trusted-cabundle=true` — the operator never
   creates or labels this ConfigMap itself (`../../docs/proxy.md`). If a bundle isn't found yet, the hook
-  returns a retryable error (`(Retrying) trusted CA config map %q doesn't exist`); don't convert this
-  to a fatal/Degraded condition.
+  returns a retryable error (`(Retrying) trusted CA config map %q doesn't exist`). The library-go
+  `DeploymentController` sets `Degraded=True` while retrying via the factory rate limiter; this is
+  transient and clears when the ConfigMap appears — not a permanent/unretried failure.
 - The CA bundle is always mounted at the fixed path
   `/etc/pki/tls/certs/cert-manager-tls-ca-bundle.crt` with `subPath: ca-bundle.crt`
   (`deployment_overrides.go`) — this matches Go's default root cert lookup path; changing it silently

@@ -15,7 +15,7 @@ TrustManager was TechPreview and previously interacted with cluster `featuregate
 - Expose operator-local gates: `IstioCSR` (GA, default true), `TrustManager` (TechPreview, default false).  
 - Wire enablement through `--unsupported-addon-features` (and CSV/deployment args in OLM).  
 - Do **not** require cluster FeatureSet for TrustManager after CM-1141.  
-- Fail-closed on transient FeatureGate discovery errors without aborting the rest of operator startup (`starter.go` retries).
+- Retry FeatureGate discovery failures in `setupFeatureGates`; on persistent failure keep the operator running and gate optional controllers from `--unsupported-addon-features` only (cluster FeatureGate errors do not disable them).
 - CRDs always install; only controllers are gated.
 
 **Five-touchpoint wiring for any new gate**:

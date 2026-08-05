@@ -12,7 +12,7 @@ Migrating CertManager off library-go was not required for shipping optional oper
 
 ## Decision
 
-Keep **library-go** for CertManager (always-on). Use **controller-runtime** for IstioCSR and TrustManager, started only when `--unsupported-addon-features` enables the corresponding gates.
+Keep **library-go** for CertManager (always-on). Use **controller-runtime** for IstioCSR and TrustManager, started when each gate's **resolved** value is enabled (`--unsupported-addon-features` / defaults — IstioCSR GA default true; TrustManager TechPreview default false).
 
 ## Consequences
 
