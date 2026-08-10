@@ -157,7 +157,7 @@ since they are not invoked by any Makefile target in this repo.
 
 - [ ] Update `CERT_MANAGER_VERSION` / `ISTIO_CSR_VERSION` / `TRUST_MANAGER_VERSION` in `Makefile`.
 - [ ] `make update-manifests` (pulls new upstream manifests into `bindata/`).
-- [ ] `make update-bindata` and confirm `hack/verify-bindata` (via `make verify-scripts`) is clean.
+- [ ] `make update-bindata` and confirm `make verify-bindata` (also covered by `make verify-scripts`) is clean.
 - [ ] Manually update the matching `RELATED_IMAGE_*` / `*_OPERAND_IMAGE_VERSION` literal values in
   `config/manager/manager.yaml` — these are **not** derived from the Makefile variables above.
 - [ ] `make bundle` — regenerates the bundle CSV/`relatedImages` from the updated `manager.yaml`;

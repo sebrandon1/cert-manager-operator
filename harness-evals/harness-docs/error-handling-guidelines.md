@@ -1,7 +1,7 @@
 # Error Handling Guidelines
 
 Scope: the controller-runtime (ctrl-runtime) stack — **IstioCSR** and **TrustManager**. CertManager
-uses library-go and follows a different model (see [§7](#7-library-go-vs-ctrl-runtime-do-not-mix-patterns)).
+uses library-go and follows a different model (see [§7](#7-do-not-mix-library-go-and-ctrl-runtime-patterns)).
 Core types live in `pkg/controller/common/errors.go` and `reconcile_result.go`.
 
 ## 1. `ReconcileError` — the only error type reconcile logic should return
@@ -137,7 +137,7 @@ CEL-locked name likely doesn't need this at all.
 - Set both `Degraded` and `Ready` together before the single `updateConditionFn` call ("atomically"),
   as `HandleReconcileResult` does — don't split them across two separate status writes.
 
-## 7. library-go vs. ctrl-runtime — do not mix patterns
+## 7. Do not mix library-go and ctrl-runtime patterns
 
 | | CertManager (library-go) | IstioCSR / TrustManager (ctrl-runtime) |
 |---|---|---|
