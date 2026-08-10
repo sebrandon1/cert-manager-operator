@@ -28,7 +28,7 @@ Rules:
   mistake is assuming it's the operator API.
 - Do **not** hand-author CRD YAML under `config/crd/bases/`. Operand CRDs
   (`*-crd.yaml`, `customresourcedefinition_*.yml`) are produced there by
-  `make update-manifests` (`hack/update-{cert-manager,trust-manager}-manifests.sh`
+  `make update-manifests` (`hack/update-{cert-manager,istio-csr,trust-manager}-manifests.sh`
   from upstream releases). After regeneration, wire the new file into
   `config/crd/kustomization.yaml` — do **not** add a Go type in
   `api/operator/v1alpha1/`.
