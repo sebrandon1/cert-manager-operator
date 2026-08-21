@@ -46,14 +46,47 @@ enable_trust_manager_feature_gate() {
     exit 1
   fi
 
-  echo "Patching Subscription ${sub} (preserve existing env, match e2e patchSubscriptionWithEnvVars)"
+  echo "Patching Subscription ${sub} (preserve existing env, merge TrustManager=true into UNSUPPORTED_ADDON_FEATURES)"
   local patch
   patch=$(oc -n "${OPERATOR_NAMESPACE}" get "subscription/${sub}" -o json | python3 -c '
 import json, sys
+
+gate_name = "UNSUPPORTED_ADDON_FEATURES"
+gate_entry = "TrustManager=true"
+
+def merge_trust_manager(existing):
+    merged = []
+    seen_trust = False
+    for part in (p.strip() for p in (existing or "").split(",")):
+        if not part:
+            continue
+        name, _, _ = part.partition("=")
+        if name == "TrustManager":
+            if not seen_trust:
+                merged.append(gate_entry)
+                seen_trust = True
+            continue
+        merged.append(part)
+    if not seen_trust:
+        merged.append(gate_entry)
+    return ",".join(merged)
+
 sub = json.load(sys.stdin)
 cfg = (sub.get("spec") or {}).get("config") or {}
-env = [e for e in (cfg.get("env") or []) if e.get("name") != "UNSUPPORTED_ADDON_FEATURES"]
-env.append({"name": "UNSUPPORTED_ADDON_FEATURES", "value": "TrustManager=true"})
+env = []
+found = False
+for item in cfg.get("env") or []:
+    if item.get("name") != gate_name:
+        env.append(item)
+        continue
+    if found:
+        continue
+    updated = dict(item)
+    updated["value"] = merge_trust_manager(item.get("value") or "")
+    env.append(updated)
+    found = True
+if not found:
+    env.append({"name": gate_name, "value": gate_entry})
 print(json.dumps({"spec": {"config": {"env": env}}}))
 ')
   oc -n "${OPERATOR_NAMESPACE}" patch "subscription/${sub}" --type=merge -p "${patch}"
@@ -65,7 +98,8 @@ wait_for_feature_gate_rollout() {
   for _ in $(seq 1 "${POLL_ATTEMPTS}"); do
     env_val=$(oc -n "${OPERATOR_NAMESPACE}" get "deploy/${OPERATOR_DEPLOYMENT}" \
       -o jsonpath="{range .spec.template.spec.containers[0].env[?(@.name==\"${FEATURE_ENV_NAME}\")]}{.value}{end}" 2>/dev/null || true)
-    if [[ "${env_val}" == "${FEATURE_ENV_VALUE}" ]]; then
+    # Token match so merged values like IstioCSR=true,TrustManager=true succeed.
+    if [[ ",${env_val// /}," == *",${FEATURE_ENV_VALUE},"* ]]; then
       echo "Found ${FEATURE_ENV_NAME}=${env_val} on operator deployment"
       found=true
       break
