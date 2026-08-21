@@ -273,7 +273,7 @@ test: manifests generate vet test-apis test-unit ## Run tests.
 
 .PHONY: test-unit
 test-unit: ## Run unit tests.
-	go test $$(go list ./... | grep -vE 'test/[e2e|apis|utils]') -coverprofile cover.out
+	go test $$(go list ./... | grep -vE 'test/(e2e|apis|utils)(/|$$)') -coverprofile cover.out
 
 # Utilize controller-runtime provided envtest for API integration test
 .PHONY: test-apis  ## Run only the api integration tests.
