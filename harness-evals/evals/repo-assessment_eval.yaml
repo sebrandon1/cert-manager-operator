@@ -1,3 +1,205 @@
 stage: repo-assessment
 template: templates/repo-assessment-template.md
-evals: []
+evals:
+  - id: eval-r001-repo-assessment-001
+    round: 1
+    stage: repo-assessment
+    source_issue_ids: [ISSUE-001, RCA-1]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/pattern-analysis.md
+    prompt: |
+      For a repository that already runs more than one operand/controller stack, the assessment
+      must tell a planner which apply/update method and error helper to copy for a NEW controller.
+      Fail if the artifact lists controllers but does not distinguish apply strategies or names an
+      invalid sibling as the default copy-source.
+    assertions:
+      - type: must_identify_pattern
+        value: per-controller apply strategy
+      - type: must_cover_section
+        value: reusable assets or architectural guardrails
+      - type: must_mention
+        value: copy-source
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r001-repo-assessment-002
+    round: 1
+    stage: repo-assessment
+    source_issue_ids: [ISSUE-002, RCA-2]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/rca-summary.md
+    prompt: |
+      Optional/Tech Preview capabilities must document how enablement is evaluated at runtime:
+      operator-level flags, cluster FeatureSet (if used), platforms that cannot evaluate FeatureSets,
+      default value, and fail-closed registration. A list of gate names without runtime behavior is insufficient.
+    assertions:
+      - type: must_cover_section
+        value: feature gate
+      - type: must_identify_pattern
+        value: fail-closed
+      - type: must_mention
+        value: default
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r001-repo-assessment-003
+    round: 1
+    stage: repo-assessment
+    source_issue_ids: [ISSUE-003, RCA-3]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/pattern-analysis.md
+    prompt: |
+      If install manifests are generated (Helm/script → bindata) and then mutated from a CR,
+      the assessment must separate those pipelines and include change-cascade rows with real
+      make/hack verify commands. CSV/alm-examples must be called out as needing to match CRD defaults.
+    assertions:
+      - type: must_identify_pattern
+        value: bindata
+      - type: must_cover_section
+        value: change cascade
+      - type: must_cite_repo_evidence
+        value: make
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r001-repo-assessment-004
+    round: 1
+    stage: repo-assessment
+    source_issue_ids: [ISSUE-006, RCA-6]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/rca-summary.md
+    prompt: |
+      When the operator uses platform trusted-CA injection, the assessment must document operator
+      namespace vs operand namespace ConfigMaps, inject-label contract, requeue while empty, and
+      rollout when package content changes (hash/annotation).
+    assertions:
+      - type: must_identify_pattern
+        value: inject
+      - type: must_mention
+        value: namespace
+      - type: must_cover_section
+        value: image / dependency or configuration surface
+    scoring:
+      pass_threshold: 75
+
+  - id: eval-r001-repo-assessment-005
+    round: 1
+    stage: repo-assessment
+    source_issue_ids: [ISSUE-007, RCA-7]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/pattern-analysis.md
+    prompt: |
+      Test & CI reference must name the API/CRD test module or script (if separate from unit tests)
+      and the CI job that actually starts gated/optional controllers, not only the default e2e suite.
+    assertions:
+      - type: must_cover_section
+        value: test
+      - type: must_identify_pattern
+        value: e2e
+      - type: must_mention
+        value: Makefile
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r001-repo-assessment-006
+    round: 1
+    stage: repo-assessment
+    source_issue_ids: [ISSUE-008, RCA-8]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/rca-summary.md
+    prompt: |
+      Image resolution must document RELATED_IMAGE (or equivalent) triple-sync with deployment env
+      and CSV relatedImages. Assessments that only list container image names without the cascade
+      are incomplete.
+    assertions:
+      - type: must_identify_pattern
+        value: RELATED_IMAGE
+      - type: must_mention
+        value: relatedImages
+      - type: must_cover_section
+        value: change cascade
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r002-repo-assessment-007
+    round: 2
+    stage: repo-assessment
+    source_issue_ids: [ISSUE-009, RCA-9]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/rca-summary.md
+    prompt: |
+      Feature-enablement documentation must state the CURRENT runtime wiring (operator flag,
+      registration touchpoints, fail-closed default) and explicitly distinguish it from any
+      superseded cluster FeatureSet / original-EP matrix. Unused cluster-preview helpers must be
+      marked dead, not copy-sources. "Gated" must say whether CRDs always install while only
+      controllers are gated.
+    assertions:
+      - type: must_cover_section
+        value: feature gate
+      - type: must_identify_pattern
+        value: current vs historical or removed FeatureSet
+      - type: must_mention
+        value: CRD or controller
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r002-repo-assessment-008
+    round: 2
+    stage: repo-assessment
+    source_issue_ids: [ISSUE-010, RCA-10]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/pattern-analysis.md
+    prompt: |
+      CRD inventory must classify operator-reconciled APIs (Go types in this repo) vs operand-owned
+      CRDs (vendored/generated; no new Go types here) vs stub/dead CRDs. Shipping a CRD in the
+      bundle is not evidence that this operator Reconciles it.
+    assertions:
+      - type: must_identify_pattern
+        value: operator-owned vs operand-owned CRD
+      - type: must_mention
+        value: stub or dead or unused
+      - type: must_cover_section
+        value: API or architecture
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r002-repo-assessment-009
+    round: 2
+    stage: repo-assessment
+    source_issue_ids: [ISSUE-012, RCA-12]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/pattern-analysis.md
+    prompt: |
+      Shared manager caches must document which GVKs stay unfiltered because unlabeled objects are
+      also watched, and that predicates (not label-filtered ByObject) are the filter. Merging two
+      label selectors on one GVK is an invalid copy-source.
+    assertions:
+      - type: must_identify_pattern
+        value: cache or predicate
+      - type: must_mention
+        value: unlabeled or label-filter
+      - type: must_cover_section
+        value: architectural guardrails or reusable assets
+    scoring:
+      pass_threshold: 75
+
+  - id: eval-r002-repo-assessment-010
+    round: 2
+    stage: repo-assessment
+    source_issue_ids: [ISSUE-013, ISSUE-014, RCA-13, RCA-14]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/rca-summary.md
+    prompt: |
+      Image resolution must note whether Deployment RELATED_IMAGE env literals are derived from
+      Makefile operand-version variables (usually they are not). Test/CI must name distinct
+      gate-enabled vs gate-inverted e2e label suites when both exist. Placeholder/never-started
+      reconcilers must be listed as do-not-extend traps.
+    assertions:
+      - type: must_identify_pattern
+        value: RELATED_IMAGE
+      - type: must_mention
+        value: Makefile or literal
+      - type: must_cover_section
+        value: test or dead-code
+    scoring:
+      pass_threshold: 75

@@ -1,3 +1,198 @@
 stage: plan
 template: templates/plan-template.md
-evals: []
+evals:
+  - id: eval-r001-plan-001
+    round: 1
+    stage: plan
+    source_issue_ids: [ISSUE-001, RCA-1]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/pattern-analysis.md
+    prompt: |
+      §1/§3.2 must record an apply/update strategy decision for a new controller: copy-source,
+      forbidden sibling helpers, and retry vs irrecoverable errors. "Follow existing controllers"
+      fails when the repo already has more than one stack.
+    assertions:
+      - type: must_cover_section
+        value: Architectural strategy
+      - type: must_mention
+        value: apply
+      - type: must_identify_pattern
+        value: irrecoverable or retry
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r001-plan-002
+    round: 1
+    stage: plan
+    source_issue_ids: [ISSUE-002, RCA-2]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/rca-summary.md
+    prompt: |
+      Feature enablement must be a first-class phase or verification row: operator gate, cluster
+      FeatureSet if used, platforms without FeatureSets, default-off, fail-closed starter.
+    assertions:
+      - type: must_mention
+        value: feature gate
+      - type: must_include_verification_matrix
+        value: fail-closed or FeatureSet or platform
+      - type: must_cover_phase
+        value: starter or gate
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r001-plan-003
+    round: 1
+    stage: plan
+    source_issue_ids: [ISSUE-003, ISSUE-008]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/pattern-analysis.md
+    prompt: |
+      Optional operand work must not be a single "implement controller" phase. Static install
+      manifests/bindata, CR overlay, RELATED_IMAGE/CSV/examples, and docs/packaging must be
+      sequenced with dependencies.
+    assertions:
+      - type: must_cover_phase
+        value: bindata or manifest
+      - type: must_mention
+        value: RELATED_IMAGE or CSV or bundle
+      - type: must_align_with_constitution
+        value: verification hooks
+    scoring:
+      pass_threshold: 75
+
+  - id: eval-r001-plan-004
+    round: 1
+    stage: plan
+    source_issue_ids: [ISSUE-004, RCA-4]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/rca-summary.md
+    prompt: |
+      If the spec says deleting the managing CR does not uninstall operand resources, or that a
+      namespace must pre-exist, the plan must put those in non-goals/risks AND in the verification
+      matrix (not only in prose).
+    assertions:
+      - type: must_mention
+        value: delete
+      - type: must_identify_pattern
+        value: uninstall or retain or namespace
+      - type: must_include_verification_matrix
+        value: lifecycle
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r001-plan-005
+    round: 1
+    stage: plan
+    source_issue_ids: [ISSUE-005, RCA-5]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/pattern-analysis.md
+    prompt: |
+      §3.4 must describe RBAC that changes with CR policy (default rules vs extra secret write
+      resourceNames) and how container args stay consistent with that policy.
+    assertions:
+      - type: must_cover_section
+        value: RBAC
+      - type: must_mention
+        value: policy
+      - type: must_identify_pattern
+        value: ClusterRole or resourceNames
+    scoring:
+      pass_threshold: 75
+
+  - id: eval-r001-plan-006
+    round: 1
+    stage: plan
+    source_issue_ids: [ISSUE-007, RCA-7]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/rca-summary.md
+    prompt: |
+      Verification matrix must include API/CRD test harness sequencing (harness before new CRD
+      suites when repo-assessment says so) and e2e that restores cluster-global mutations.
+    assertions:
+      - type: must_include_verification_matrix
+        value: e2e
+      - type: must_mention
+        value: restore or teardown or isolation
+      - type: must_reference_spec_ids
+        value: FR
+    scoring:
+      pass_threshold: 75
+
+  - id: eval-r002-plan-007
+    round: 2
+    stage: plan
+    source_issue_ids: [ISSUE-009, RCA-9]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/rca-summary.md
+    prompt: |
+      Enablement phases must cite CURRENT repo-assessment/ADR wiring (operator flag, five
+      registration touchpoints or the repo's equivalent, CRDs-always-on vs controllers-gated).
+      Copying a superseded original-EP cluster FeatureSet path, or resurrecting unused
+      cluster-preview helpers, fails.
+    assertions:
+      - type: must_mention
+        value: feature gate
+      - type: must_cover_phase
+        value: starter or gate
+      - type: must_identify_pattern
+        value: current enablement or touchpoint
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r002-plan-008
+    round: 2
+    stage: plan
+    source_issue_ids: [ISSUE-010, ISSUE-014, RCA-10, RCA-14]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/pattern-analysis.md
+    prompt: |
+      §3.1 must classify CRDs as operator-reconciled vs operand-owned vs stub/dead. Plans must not
+      add Go types for operand-owned CRDs or extend placeholder/never-started reconcilers.
+    assertions:
+      - type: must_cover_section
+        value: Kubernetes APIs
+      - type: must_mention
+        value: operand or stub
+      - type: must_identify_pattern
+        value: do not extend placeholder or no Go types for operand CRDs
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r002-plan-009
+    round: 2
+    stage: plan
+    source_issue_ids: [ISSUE-012, ISSUE-013, RCA-12, RCA-13]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/pattern-analysis.md
+    prompt: |
+      New watches on a shared cache must justify unfiltered informers plus predicates. E2E
+      verification must split gate-enabled vs gate-inverted label suites. Packaging must edit
+      RELATED_IMAGE / Deployment literals then bundle — not only Makefile version variables.
+    assertions:
+      - type: must_mention
+        value: predicate or cache
+      - type: must_include_verification_matrix
+        value: e2e
+      - type: must_mention
+        value: RELATED_IMAGE or literal
+    scoring:
+      pass_threshold: 75
+
+  - id: eval-r002-plan-010
+    round: 2
+    stage: plan
+    source_issue_ids: [ISSUE-011, RCA-11]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/rca-summary.md
+    prompt: |
+      Unit verification hooks for a new or changed controller must require tests that assert the
+      real apply path (Patch vs Update vs library-go), not merely that a test file exists.
+    assertions:
+      - type: must_include_verification_matrix
+        value: unit
+      - type: must_mention
+        value: Patch or Update or apply
+      - type: must_identify_pattern
+        value: apply path or FieldOwner
+    scoring:
+      pass_threshold: 80
