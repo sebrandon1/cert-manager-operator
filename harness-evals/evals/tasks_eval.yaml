@@ -1,3 +1,198 @@
 stage: tasks
 template: templates/tasks-template.md
-evals: []
+evals:
+  - id: eval-r001-tasks-001
+    round: 1
+    stage: tasks
+    source_issue_ids: [ISSUE-007, RCA-7]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/pattern-analysis.md
+    prompt: |
+      If repo-assessment documents a separate API test module or Makefile harness, the DAG must
+      include that harness task before API test-suite tasks. API tests must not depend only on
+      "types exist."
+    assertions:
+      - type: must_respect_dag
+        value: harness before API tests
+      - type: must_mention
+        value: test-apis or API test
+      - type: must_assign_agent
+        value: Testing_Agent or API_Agent
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r001-tasks-002
+    round: 1
+    stage: tasks
+    source_issue_ids: [ISSUE-005, RCA-5]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/rca-summary.md
+    prompt: |
+      Tasks that add enum/policy fields or optional nested spec must include table-driven tests for
+      every policy value and for omitted optional blocks (nil-safe). Deferred coverage requires an
+      explicit follow-up Testing task ID in Depends On.
+    assertions:
+      - type: must_define_acceptance_criteria
+        value: table-driven or permutation
+      - type: must_mention
+        value: optional
+      - type: must_cover_all_spec_requirements
+        value: policy
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r001-tasks-003
+    round: 1
+    stage: tasks
+    source_issue_ids: [ISSUE-007]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/pattern-analysis.md
+    prompt: |
+      E2E/cluster tasks must require restore of cluster-global mutations, unique object names
+      (AlreadyExists is not success), and assertions on specific condition type/reason rather than
+      Ready=False alone.
+    assertions:
+      - type: must_define_acceptance_criteria
+        value: restore
+      - type: must_mention
+        value: AlreadyExists or unique
+      - type: must_assign_agent
+        value: Testing_Agent
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r001-tasks-004
+    round: 1
+    stage: tasks
+    source_issue_ids: [ISSUE-001, RCA-1]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/rca-summary.md
+    prompt: |
+      Controller implementation tasks must name the allowed apply/error helper and the forbidden
+      sibling-operand copy in Non-goals / Implementation notes.
+    assertions:
+      - type: must_mention
+        value: forbidden or do not copy
+      - type: must_assign_agent
+        value: OperatorController_Agent
+      - type: must_define_acceptance_criteria
+        value: apply or SSA or Update
+    scoring:
+      pass_threshold: 75
+
+  - id: eval-r001-tasks-005
+    round: 1
+    stage: tasks
+    source_issue_ids: [ISSUE-003, ISSUE-008]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/pattern-analysis.md
+    prompt: |
+      Bindata/Helm generation, CR overlay, RELATED_IMAGE/CSV, and docs must be separate tasks with
+      distinct agents (ManifestsBindata, OperatorController, OLMRelease, Docs) — not one controller task.
+    assertions:
+      - type: must_assign_agent
+        value: ManifestsBindata_Agent
+      - type: must_assign_agent
+        value: OLMRelease_Agent
+      - type: must_mention
+        value: RELATED_IMAGE or bundle
+    scoring:
+      pass_threshold: 75
+
+  - id: eval-r001-tasks-006
+    round: 1
+    stage: tasks
+    source_issue_ids: [ISSUE-004, RCA-4]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/rca-summary.md
+    prompt: |
+      Coverage checklist must map lifecycle non-goals (CR delete retains resources; namespace not
+      auto-created) to at least one Testing or e2e task with explicit acceptance criteria.
+    assertions:
+      - type: must_cover_all_spec_requirements
+        value: delete or uninstall or namespace
+      - type: must_define_acceptance_criteria
+        value: retain or does not create
+      - type: must_respect_dag
+        value: e2e after install path
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r002-tasks-007
+    round: 2
+    stage: tasks
+    source_issue_ids: [ISSUE-011, RCA-11]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/rca-summary.md
+    prompt: |
+      Controller implementation tasks must require unit tests that assert the real apply path of
+      THIS package (Patch+Apply+FieldOwner vs Update vs library-go resourceapply). A green test on
+      the wrong client method fails the acceptance criteria.
+    assertions:
+      - type: must_define_acceptance_criteria
+        value: Patch or Update or apply
+      - type: must_assign_agent
+        value: OperatorController_Agent
+      - type: must_mention
+        value: FieldOwner or resourceapply or Fake
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r002-tasks-008
+    round: 2
+    stage: tasks
+    source_issue_ids: [ISSUE-013, RCA-13]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/pattern-analysis.md
+    prompt: |
+      E2E tasks must use distinct label expressions for gate-enabled vs gate-inverted suites and
+      must not merge those filters. Coverage checklist should map both suites when repo-assessment
+      documents both.
+    assertions:
+      - type: must_assign_agent
+        value: Testing_Agent
+      - type: must_mention
+        value: label or inverted
+      - type: must_define_acceptance_criteria
+        value: distinct suite or filter
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r002-tasks-009
+    round: 2
+    stage: tasks
+    source_issue_ids: [ISSUE-008, ISSUE-013, RCA-13]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/rca-summary.md
+    prompt: |
+      OLMRelease / image tasks that bump operand versions must edit Deployment RELATED_IMAGE
+      literals (and matching constants) then bundle verify — not only Makefile version variables.
+    assertions:
+      - type: must_assign_agent
+        value: OLMRelease_Agent
+      - type: must_mention
+        value: RELATED_IMAGE
+      - type: must_define_acceptance_criteria
+        value: literal or Deployment env or bundle
+    scoring:
+      pass_threshold: 75
+
+  - id: eval-r002-tasks-010
+    round: 2
+    stage: tasks
+    source_issue_ids: [ISSUE-010, ISSUE-014, RCA-10, RCA-14]
+    input_refs:
+      - eval-generation/eval-generation-workflow/outputs/epic-bug-analysis/pattern-analysis.md
+    prompt: |
+      API tasks must forbid adding Go types for operand-owned CRDs. Controller tasks must list
+      placeholder/never-started reconcilers as Non-goals (do not extend). Warn-only CR-delete
+      cleanup remains a non-goal unless the spec/plan scopes uninstall.
+    assertions:
+      - type: must_mention
+        value: forbidden or do not
+      - type: must_cover_all_spec_requirements
+        value: operand CRD or placeholder or cleanup
+      - type: must_assign_agent
+        value: API_Agent or OperatorController_Agent
+    scoring:
+      pass_threshold: 75

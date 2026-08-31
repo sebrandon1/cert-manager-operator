@@ -1,7 +1,7 @@
 stage: code-generation
 artifact: fork working copy (code + tests)
 version: 1
-eval_count: 0
+eval_count: 19
 oape_commands:
   - api-generate
   - api-generate-tests
@@ -9,4 +9,358 @@ oape_commands:
   - e2e-generate
   - manual
   - any
-evals: []
+evals:
+  - id: eval-r001-codegen-001
+    round: 1
+    stage: code-generation
+    oape_command: api-generate
+    source_issue_ids: [ISSUE-005, RCA-5]
+    prompt: |
+      New CR fields that are optional nested objects must be pointer or equivalent omitempty types
+      with validation that does not assume the nested object is always present. Immutable fields
+      need CEL/XValidation (or documented equivalent) once set.
+    assertions:
+      - type: must_use_pattern
+        value: omitempty
+      - type: must_include_tests
+        value: validation
+      - type: must_follow_constitution
+        value: API compatibility
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r001-codegen-002
+    round: 1
+    stage: code-generation
+    oape_command: api-generate
+    source_issue_ids: [ISSUE-001]
+    prompt: |
+      CRD status and printer-column documentation must describe this API only. Copy-pasted sibling
+      operand names in comments or OpenAPI descriptions fail.
+    assertions:
+      - type: must_not_use
+        value: sibling operand name in this CRD's status description
+      - type: must_match_task_payload
+        value: types and CRD markers
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r001-codegen-003
+    round: 1
+    stage: code-generation
+    oape_command: api-generate-tests
+    source_issue_ids: [ISSUE-005, ISSUE-007]
+    prompt: |
+      API/CRD tests must cover omitted optional blocks, every policy enum value, and invalid
+      transitions for immutable fields. Tests must run via the repo's API test target, not only go test on controllers.
+    assertions:
+      - type: must_include_tests
+        value: optional omitted
+      - type: must_pass_make_targets
+        value: API test harness target from agents.md / Makefile
+      - type: must_co_generate_tests
+        value: true
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r001-codegen-004
+    round: 1
+    stage: code-generation
+    oape_command: api-implement
+    source_issue_ids: [ISSUE-005, RCA-5]
+    prompt: |
+      Reconcile code must not dereference optional spec pointers unconditionally. Policy-driven
+      ClusterRole rules and container args must stay consistent (extra secret write verbs only when policy allows).
+    assertions:
+      - type: must_not_use
+        value: unconditional nested spec dereference without nil check
+      - type: must_use_pattern
+        value: policy
+      - type: must_include_tests
+        value: nil or omitted spec
+      - type: must_co_generate_tests
+        value: true
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r001-codegen-005
+    round: 1
+    stage: code-generation
+    oape_command: api-implement
+    source_issue_ids: [ISSUE-001, RCA-1]
+    prompt: |
+      New controllers must use the apply/error helpers named in the task payload. Copying a sibling
+      operand's Create+Update or library-go apply path without an explicit task mandate fails.
+    assertions:
+      - type: must_match_task_payload
+        value: apply strategy
+      - type: must_follow_effective_go
+        value: true
+      - type: must_execute_verification
+        value: go build and go vet
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r001-codegen-006
+    round: 1
+    stage: code-generation
+    oape_command: api-implement
+    source_issue_ids: [ISSUE-002, RCA-2]
+    prompt: |
+      Feature-gated controllers must be registered fail-closed (default off). Platform exceptions
+      for missing FeatureSets must match the spec/plan, not an accidental always-on starter path.
+    assertions:
+      - type: must_use_pattern
+        value: feature gate
+      - type: must_include_tests
+        value: disabled or fail-closed
+      - type: must_not_violate_non_goals
+        value: default-off Tech Preview
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r001-codegen-007
+    round: 1
+    stage: code-generation
+    oape_command: manual
+    source_issue_ids: [ISSUE-003, ISSUE-008]
+    prompt: |
+      Bindata/Helm render and CSV/alm-examples must match CRD defaults (optional sources not enabled
+      in samples unless the managing CR enables them). RELATED_IMAGE env, code constants, and CSV
+      relatedImages must stay in sync. Run bindata/bundle verify make targets.
+    assertions:
+      - type: must_pass_make_targets
+        value: bindata or bundle verify
+      - type: must_use_pattern
+        value: RELATED_IMAGE
+      - type: must_match_task_payload
+        value: examples aligned with defaults
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r001-codegen-008
+    round: 1
+    stage: code-generation
+    oape_command: e2e-generate
+    source_issue_ids: [ISSUE-007, RCA-7]
+    prompt: |
+      E2E must restore cluster-global mutations (feature-env on subscription, Proxy, user-CA
+      ConfigMaps), use unique names, and assert specific condition reasons. AlreadyExists must not
+      count as a successful create.
+    assertions:
+      - type: must_use_pattern
+        value: DeferCleanup or restore
+      - type: must_not_use
+        value: ignore AlreadyExists as success
+      - type: must_include_tests
+        value: condition reason
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r001-codegen-009
+    round: 1
+    stage: code-generation
+    oape_command: e2e-generate
+    source_issue_ids: [ISSUE-004]
+    prompt: |
+      If lifecycle non-goals retain resources after CR delete, e2e (or a dedicated test) must assert
+      that operand resources still exist after delete, and that a missing required namespace degrades
+      without the operator creating the namespace.
+    assertions:
+      - type: must_include_tests
+        value: delete
+      - type: must_not_violate_non_goals
+        value: no uninstall on CR delete
+    scoring:
+      pass_threshold: 75
+
+  - id: eval-r001-codegen-010
+    round: 1
+    stage: code-generation
+    oape_command: any
+    source_issue_ids: [ISSUE-001]
+    prompt: |
+      Every task that changes Go must run go build and go vet on the affected packages. Generated
+      files (deepcopy, bindata, clients) must not be hand-edited.
+    assertions:
+      - type: must_execute_verification
+        value: go build
+      - type: must_not_use
+        value: hand-edit of zz_generated or bindata.go
+      - type: must_follow_constitution
+        value: true
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r002-codegen-011
+    round: 2
+    stage: code-generation
+    oape_command: api-generate
+    source_issue_ids: [ISSUE-010, RCA-10]
+    prompt: |
+      New Go API types must be only for CRDs this operator reconciles. Operand-owned CRDs are
+      regenerated via the repo's manifest pipeline and kustomization, not by adding types in the
+      operator API package. Stub/dead CRDs must not be treated as the operator API. Do not
+      hand-author generated CRD YAML.
+    assertions:
+      - type: must_not_use
+        value: Go types for operand-owned CRDs
+      - type: must_match_task_payload
+        value: operator-reconciled API only
+      - type: must_pass_make_targets
+        value: generate or update-manifests
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r002-codegen-012
+    round: 2
+    stage: code-generation
+    oape_command: api-generate-tests
+    source_issue_ids: [ISSUE-011, RCA-11]
+    prompt: |
+      API/CRD test harnesses are not a substitute for controller unit tests that assert the apply
+      idiom. When generating API tests, do not fake a Patch vs Update vs library-go apply path that
+      the controller does not use.
+    assertions:
+      - type: must_include_tests
+        value: validation
+      - type: must_not_use
+        value: wrong apply idiom as a stand-in for controller tests
+      - type: must_co_generate_tests
+        value: true
+    scoring:
+      pass_threshold: 75
+
+  - id: eval-r002-codegen-013
+    round: 2
+    stage: code-generation
+    oape_command: api-implement
+    source_issue_ids: [ISSUE-011, RCA-11]
+    prompt: |
+      Controller unit tests must assert the real apply path of this package: Patch+Apply+FieldOwner
+      vs Update vs library-go resourceapply. Status/finalizers may still Update even when resource
+      apply is SSA. A green test that counts the wrong client method fails.
+    assertions:
+      - type: must_include_tests
+        value: Patch or Update or Apply
+      - type: must_use_pattern
+        value: FieldOwner or resourceapply matching this controller
+      - type: must_co_generate_tests
+        value: true
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r002-codegen-014
+    round: 2
+    stage: code-generation
+    oape_command: api-implement
+    source_issue_ids: [ISSUE-012, RCA-12]
+    prompt: |
+      New watches on a shared cache must not add label-filtered informers for GVKs that also watch
+      unlabeled objects. Use predicates. Do not merge two label selectors on one GVK.
+    assertions:
+      - type: must_not_use
+        value: label-filtered cache for unlabeled watches
+      - type: must_use_pattern
+        value: predicate
+      - type: must_follow_effective_go
+        value: true
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r002-codegen-015
+    round: 2
+    stage: code-generation
+    oape_command: api-implement
+    source_issue_ids: [ISSUE-009, RCA-9]
+    prompt: |
+      New or changed feature gates must wire all repo-documented touchpoints (API default/pre-release,
+      flag registration, starter parse, runtime IsEnabled, manager cache + reconciler registration).
+      Do not resurrect unused cluster-preview helpers. CRDs typically always install; only
+      controllers are gated. Fail-closed / default-off for Tech Preview still applies.
+    assertions:
+      - type: must_use_pattern
+        value: feature gate
+      - type: must_not_use
+        value: unused cluster-preview helper
+      - type: must_include_tests
+        value: disabled or fail-closed
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r002-codegen-016
+    round: 2
+    stage: code-generation
+    oape_command: api-implement
+    source_issue_ids: [ISSUE-014, RCA-14]
+    prompt: |
+      Placeholder / never-started reconcilers (RBAC-marker stubs) must not be extended with real
+      reconcile logic. Warn-only CR-delete cleanup must not be turned into uninstall unless the
+      task payload scopes that work.
+    assertions:
+      - type: must_not_use
+        value: extend placeholder reconciler
+      - type: must_not_violate_non_goals
+        value: warn-only cleanup or no uninstall on CR delete
+      - type: must_match_task_payload
+        value: true
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r002-codegen-017
+    round: 2
+    stage: code-generation
+    oape_command: e2e-generate
+    source_issue_ids: [ISSUE-013, RCA-13]
+    prompt: |
+      E2E must use distinct Ginkgo (or equivalent) label expressions for gate-enabled vs
+      gate-inverted suites. Do not merge those filters. `make test` typically does not run e2e —
+      invoke the documented e2e targets.
+    assertions:
+      - type: must_use_pattern
+        value: distinct label filter
+      - type: must_not_use
+        value: merged enabled and inverted suite
+      - type: must_pass_make_targets
+        value: e2e target from repo-assessment
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r002-codegen-018
+    round: 2
+    stage: code-generation
+    oape_command: manual
+    source_issue_ids: [ISSUE-013, RCA-13]
+    prompt: |
+      Operand image bumps must edit Deployment RELATED_IMAGE env literals and matching code
+      constants, then regenerate the bundle/CSV relatedImages. Changing only Makefile
+      operand-version variables is insufficient unless repo-assessment proves those literals are
+      generated from the Makefile.
+    assertions:
+      - type: must_use_pattern
+        value: RELATED_IMAGE
+      - type: must_pass_make_targets
+        value: bundle
+      - type: must_not_use
+        value: Makefile-only version bump
+    scoring:
+      pass_threshold: 80
+
+  - id: eval-r002-codegen-019
+    round: 2
+    stage: code-generation
+    oape_command: any
+    source_issue_ids: [ISSUE-010]
+    prompt: |
+      Generated CRD YAML, bindata, deepcopy, and clients must be regenerated with the repo's make
+      targets, not hand-edited. Operand CRD files belong in the manifest pipeline, not in the
+      operator API package.
+    assertions:
+      - type: must_not_use
+        value: hand-edit of generated CRD or bindata
+      - type: must_pass_make_targets
+        value: generate or update-manifests or verify-bindata
+      - type: must_execute_verification
+        value: go vet or make verify
+    scoring:
+      pass_threshold: 80
