@@ -384,6 +384,10 @@ undeploy: $(KUSTOMIZE) ## Undeploy controller from the K8s cluster specified in 
 	$(KUSTOMIZE) build config/default | kubectl delete --ignore-not-found -f -
 	kubectl delete namespace cert-manager-operator --ignore-not-found
 
+.PHONY: deploy-trust-manager
+deploy-trust-manager: ## Enable TrustManager and wait until the operand is Available (CI / local).
+	./hack/deploy-trust-manager.sh
+
 # ============================================================================
 # Bundle / OLM
 # ============================================================================
