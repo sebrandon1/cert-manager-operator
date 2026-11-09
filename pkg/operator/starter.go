@@ -181,7 +181,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext, tlsWa
 
 	if istioCSREnabled || trustManagerEnabled || http01ProxyEnabled {
 		// Create unified manager for all enabled operand controllers
-		manager, err := NewControllerManager(ControllerConfig{
+		manager, err := NewControllerManager(ctx, ControllerConfig{
 			EnableIstioCSR:     istioCSREnabled,
 			EnableTrustManager: trustManagerEnabled,
 			EnableHTTP01Proxy:  http01ProxyEnabled,

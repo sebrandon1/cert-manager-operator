@@ -2,8 +2,11 @@ package operator
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"reflect"
+	"time"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -14,7 +17,9 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
+	utilnet "k8s.io/apimachinery/pkg/util/net"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	clientscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -41,6 +46,11 @@ import (
 var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup-manager")
+
+	// apiServerReadBackoff bounds the retries of the startup APIServer read
+	// (5 attempts, about 15s). The operator is restarted on every cluster TLS
+	// profile change, which is exactly when kube-apiserver is rolling out.
+	apiServerReadBackoff = wait.Backoff{Duration: time.Second, Factor: 2, Steps: 5}
 )
 
 // ConfigMap is intentionally excluded from both istioCSRManagedResources and
@@ -128,7 +138,7 @@ type ControllerConfig struct {
 
 // NewControllerManager creates a unified manager for all enabled operand controllers.
 // It shares a single metrics server, cache, and client across all controllers.
-func NewControllerManager(config ControllerConfig) (*Manager, error) {
+func NewControllerManager(ctx context.Context, config ControllerConfig) (*Manager, error) {
 	setupLog.Info("setting up unified operator manager")
 	setupLog.Info("controller", "version", version.Get())
 	setupLog.Info("enabled controllers", "istioCSR", config.EnableIstioCSR, "trustManager", config.EnableTrustManager, "http01Proxy", config.EnableHTTP01Proxy)
@@ -149,7 +159,7 @@ func NewControllerManager(config ControllerConfig) (*Manager, error) {
 
 	// Setup enabled controllers
 	if config.EnableIstioCSR {
-		if err := setupIstioCSRController(mgr); err != nil {
+		if err := setupIstioCSRController(ctx, mgr); err != nil {
 			return nil, err
 		}
 	}
@@ -174,10 +184,10 @@ func NewControllerManager(config ControllerConfig) (*Manager, error) {
 // setupIstioCSRController creates and registers the IstioCSR controller with the manager.
 // It reads the cluster TLS profile once at startup; subsequent changes trigger an
 // operator restart via SecurityProfileWatcher.
-func setupIstioCSRController(mgr ctrl.Manager) error {
+func setupIstioCSRController(ctx context.Context, mgr ctrl.Manager) error {
 	setupLog.Info("setting up controller", "name", istiocsr.ControllerName)
 
-	tlsConfig, err := resolveIstioCSRTLSConfig(mgr.GetAPIReader())
+	tlsConfig, err := resolveIstioCSRTLSConfig(ctx, mgr.GetAPIReader())
 	if err != nil {
 		return fmt.Errorf("failed to resolve TLS config for %s: %w", istiocsr.ControllerName, err)
 	}
@@ -195,10 +205,22 @@ func setupIstioCSRController(mgr ctrl.Manager) error {
 // resolveIstioCSRTLSConfig reads apiserver.config.openshift.io/cluster and returns
 // the TLS config for the IstioCSR controller. This is called once at controller
 // startup; subsequent changes to the cluster TLS profile trigger an operator restart.
-func resolveIstioCSRTLSConfig(reader client.Reader) (istiocsr.TLSConfig, error) {
-	ctx := context.Background()
+// Transient apiserver errors are retried with apiServerReadBackoff.
+func resolveIstioCSRTLSConfig(ctx context.Context, reader client.Reader) (istiocsr.TLSConfig, error) {
 	apiServer := &configv1.APIServer{}
-	if err := reader.Get(ctx, client.ObjectKey{Name: "cluster"}, apiServer); err != nil {
+	var err error
+	if waitErr := wait.ExponentialBackoffWithContext(ctx, apiServerReadBackoff, func(ctx context.Context) (bool, error) {
+		err = reader.Get(ctx, client.ObjectKey{Name: "cluster"}, apiServer)
+		if isTransientAPIError(err) {
+			setupLog.Info("transient error reading apiserver.config.openshift.io/cluster, retrying", "error", err.Error())
+			return false, nil
+		}
+		return true, nil
+	}); waitErr != nil && err == nil {
+		// The context was cancelled before the first attempt.
+		err = waitErr
+	}
+	if err != nil {
 		if apierrors.IsNotFound(err) {
 			setupLog.V(4).Info("apiserver.config.openshift.io/cluster not found; using default TLS config")
 			return istiocsr.TLSConfig{}, nil
@@ -225,6 +247,23 @@ func resolveIstioCSRTLSConfig(reader client.Reader) (istiocsr.TLSConfig, error) 
 
 	setupLog.Info("resolved cluster TLS profile for istio-csr", "minTLSVersion", spec.MinTLSVersion, "ciphers", len(spec.Ciphers))
 	return istiocsr.TLSConfig{Adherence: adherence, Spec: spec, Honor: true}, nil
+}
+
+// isTransientAPIError reports whether err is a transient apiserver or transport
+// failure that is worth retrying during startup.
+func isTransientAPIError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if apierrors.IsTimeout(err) || apierrors.IsServerTimeout(err) || apierrors.IsTooManyRequests(err) ||
+		apierrors.IsServiceUnavailable(err) || apierrors.IsInternalError(err) {
+		return true
+	}
+	if utilnet.IsConnectionRefused(err) || utilnet.IsConnectionReset(err) || utilnet.IsProbableEOF(err) {
+		return true
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
 }
 
 // setupTrustManagerController creates and registers the TrustManager controller with the manager.
