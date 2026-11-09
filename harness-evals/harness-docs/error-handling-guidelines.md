@@ -36,9 +36,9 @@ Check classification with `IsIrrecoverableError`, `IsRetryRequiredError`, `IsMul
 ## 2. `FromClientError` mapping (`errors.go`)
 
 ```go
-apierrors.IsUnauthorized / IsForbidden / IsInvalid / IsBadRequest / IsServiceUnavailable
+apierrors.IsUnauthorized / IsForbidden / IsInvalid / IsBadRequest
     → IrrecoverableError
-everything else (NotFound, Conflict, AlreadyExists, timeouts, ...)
+everything else (NotFound, Conflict, AlreadyExists, timeouts, 503 ServiceUnavailable, ...)
     → RetryRequiredError
 ```
 

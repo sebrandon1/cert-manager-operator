@@ -67,12 +67,14 @@ func NewRetryRequiredError(err error, message string, args ...any) *ReconcileErr
 }
 
 // FromClientError creates a ReconcileError from a Kubernetes client error.
+// Transient apiserver errors such as 503 ServiceUnavailable fall through to
+// RetryRequiredError so the reconcile is requeued instead of left Degraded.
 func FromClientError(err error, message string, args ...any) *ReconcileError {
 	if err == nil {
 		return nil
 	}
 	if apierrors.IsUnauthorized(err) || apierrors.IsForbidden(err) || apierrors.IsInvalid(err) ||
-		apierrors.IsBadRequest(err) || apierrors.IsServiceUnavailable(err) {
+		apierrors.IsBadRequest(err) {
 		return NewIrrecoverableError(err, message, args...)
 	}
 

@@ -113,9 +113,34 @@ func TestFromClientError(t *testing.T) {
 			wantIrrecover: true,
 		},
 		{
-			name:          "ServiceUnavailable is irrecoverable",
-			clientErr:     apierrors.NewServiceUnavailable("service unavailable"),
-			wantIrrecover: true,
+			name:      "ServiceUnavailable is retry required",
+			clientErr: apierrors.NewServiceUnavailable("service unavailable"),
+			wantRetry: true,
+		},
+		{
+			name:      "wrapped ServiceUnavailable is retry required",
+			clientErr: fmt.Errorf("apply deployment: %w", apierrors.NewServiceUnavailable("service unavailable")),
+			wantRetry: true,
+		},
+		{
+			name:      "Timeout is retry required",
+			clientErr: apierrors.NewTimeoutError("request timed out", 1),
+			wantRetry: true,
+		},
+		{
+			name:      "ServerTimeout is retry required",
+			clientErr: apierrors.NewServerTimeout(schema.GroupResource{Resource: "test"}, "get", 1),
+			wantRetry: true,
+		},
+		{
+			name:      "TooManyRequests is retry required",
+			clientErr: apierrors.NewTooManyRequests("too many requests", 1),
+			wantRetry: true,
+		},
+		{
+			name:      "InternalError is retry required",
+			clientErr: apierrors.NewInternalError(fmt.Errorf("etcdserver: request timed out")),
+			wantRetry: true,
 		},
 		{
 			name:      "Conflict is retry required",

@@ -113,7 +113,7 @@ Use `pkg/controller/common` (`ReconcileError`, `FromClientError`, `HandleReconci
 | `RetryRequiredError` | False / Ready | False / Progressing | `{RequeueAfter: 30s}` |
 | `IrrecoverableError` | True / Failed | False / Failed | `{}` (no requeue until next event) |
 
-**`FromClientError`**: Unauthorized/Forbidden/Invalid/BadRequest/ServiceUnavailable → Irrecoverable; **everything else** (incl. NotFound/Conflict) → Retry. Don’t special-case NotFound/Conflict in reconcile — wrap with `FromClientError`.
+**`FromClientError`**: Unauthorized/Forbidden/Invalid/BadRequest → Irrecoverable; **everything else** (incl. NotFound/Conflict and transient 503/504/429) → Retry. Don’t special-case NotFound/Conflict in reconcile — wrap with `FromClientError`.
 
 **`MultipleInstanceError`**: **IstioCSR only** (namespaced singleton; CEL can’t see siblings). Set Ready=False on the rejected instance, emit Warning, **`err = nil`** before returning — do **not** route through `HandleReconcileResult`. TrustManager is cluster-scoped `cluster` — Kubernetes name uniqueness + CEL name-lock already prevent duplicates.
 

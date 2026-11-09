@@ -90,7 +90,7 @@ predicate instead of a cache selector.
 - `MultipleInstanceError` — singleton-CR violation.
 
 `FromClientError` classifies apiserver errors: `Unauthorized` / `Forbidden` / `Invalid` /
-`BadRequest` / `ServiceUnavailable` → irrecoverable; everything else → retry-required.
+`BadRequest` → irrecoverable; everything else (including transient `ServiceUnavailable`) → retry-required.
 Always wrap client errors through `common.FromClientError(err, "message %s", args...)`
 rather than returning raw errors from Reconcile.
 

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -87,6 +88,17 @@ func TestHandleReconcileResult(t *testing.T) {
 			reconcileErr:    retryErr,
 			wantResult:      ctrl.Result{RequeueAfter: testRequeueDuration},
 			wantCalls:       0,
+			wantDegraded:    metav1.ConditionFalse,
+			wantReady:       metav1.ConditionFalse,
+			wantReadyReason: v1alpha1.ReasonInProgress,
+		},
+		{
+			// Regression: a 503 used to be classified as irrecoverable, which
+			// left the operand Degraded with no requeue.
+			name:            "apiserver 503 from FromClientError requeues",
+			reconcileErr:    FromClientError(apierrors.NewServiceUnavailable("apiserver is shutting down"), "failed to apply deployment"),
+			wantResult:      ctrl.Result{RequeueAfter: testRequeueDuration},
+			wantCalls:       1,
 			wantDegraded:    metav1.ConditionFalse,
 			wantReady:       metav1.ConditionFalse,
 			wantReadyReason: v1alpha1.ReasonInProgress,
